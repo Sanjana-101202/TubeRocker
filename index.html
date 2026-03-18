@@ -235,7 +235,7 @@
     <span id="status-text">CONNECTING...</span>
   </div>
  
-  <div class="gpio-label">GPIO PIN 12</div>
+  <div class="gpio-label">GPIO PIN 14</div>
  
   <button class="toggle-btn" id="toggleBtn" disabled onclick="toggle()">
     <span class="btn-icon">⏻</span>
@@ -247,7 +247,7 @@
  
 <script>
   const BROKER   = 'wss://broker.hivemq.com:8884/mqtt';
-  const PUB      = 'tuberocker_esp/gpio12';
+  const PUB      = 'tuberocker_esp/gpio14';
   const SUB      = 'tuberocker_esp';
   const CLIENT_ID = 'web_ctrl_' + Math.random().toString(16).slice(2, 8);
  
