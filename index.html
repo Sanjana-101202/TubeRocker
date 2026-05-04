@@ -3,749 +3,1319 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Tube Rocker — Motor Control System</title>
-<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+<title>TUBE ROCKER — Control Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/4.3.7/mqtt.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;600;800;900&display=swap" rel="stylesheet">
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&display=swap');
-:root {
-  --bg:       #0f140f;
-  --bg2:      #141a14;
-  --bg3:      #0a0e0a;
-  --border:   #1e2e1e;
-  --border2:  #2a422a;
-  --green:    #4caf50;
-  --gdim:     #2a5c2a;
-  --ghi:      #76ff7a;
-  --gmid:     #a5d6a7;
-  --amber:    #ffc107;
-  --red:      #f44336;
-  --rdim:     #4a1010;
-  --text:     #a8c0a8;
-  --tdim:     #4a604a;
-  --thi:      #dceadc;
-  --mono:     'Share Tech Mono', monospace;
-  --sans:     'Rajdhani', sans-serif;
-}
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-html,body{background:var(--bg);color:var(--text);font-family:var(--mono);font-size:12px;min-height:100vh;overflow-x:hidden;}
-body::before{content:'';position:fixed;inset:0;z-index:999;background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,0.025) 3px,rgba(0,0,0,0.025) 4px);pointer-events:none;}
+  :root {
+    --bg:       #080b0f;
+    --surface:  #0e1318;
+    --border:   #1e2830;
+    --amber:    #f59e0b;
+    --amber-dim:#7c4f07;
+    --green:    #22c55e;
+    --red:      #ef4444;
+    --blue:     #38bdf8;
+    --muted:    #4a5568;
+    --text:     #c8d6e5;
+    --text-dim: #5a6a7a;
+    --mono:     'Share Tech Mono', monospace;
+    --display:  'Orbitron', sans-serif;
+  }
 
-/* HEADER */
-.hdr{background:#090d09;border-bottom:1px solid var(--border2);padding:0 18px;height:46px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200;}
-.hdr-l{display:flex;align-items:center;gap:12px;}
-.logo{width:26px;height:26px;border:1px solid var(--gdim);display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--green);}
-.hdr-title{font-family:var(--sans);font-size:14px;font-weight:700;color:var(--ghi);letter-spacing:4px;text-transform:uppercase;}
-.hdr-sub{font-size:9px;color:var(--tdim);letter-spacing:2px;}
-.hdr-r{display:flex;align-items:center;gap:14px;}
-.chip{font-size:9px;padding:3px 8px;border-radius:1px;letter-spacing:1px;text-transform:uppercase;border:1px solid;}
-.chip-g{background:#0a200a;color:var(--ghi);border-color:var(--gdim);}
-.chip-a{background:#201400;color:var(--amber);border-color:#604000;}
-.chip-r{background:var(--rdim);color:#ff9090;border-color:#7a1a1a;}
-.chip-off{background:#1a1a1a;color:#555;border-color:#333;}
-#clock{font-size:13px;color:var(--gmid);letter-spacing:2px;}
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-/* LAYOUT */
-.body{display:grid;grid-template-columns:210px 1fr 210px;height:calc(100vh - 46px);}
-.col{display:flex;flex-direction:column;border-right:1px solid var(--border);overflow-y:auto;}
-.col:last-child{border-right:none;border-left:1px solid var(--border);}
-.main{overflow-y:auto;}
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
 
-/* PANELS */
-.panel{border-bottom:1px solid var(--border);padding:11px 13px;}
-.pt{font-size:8px;letter-spacing:3px;text-transform:uppercase;color:var(--tdim);margin-bottom:9px;display:flex;align-items:center;gap:5px;}
-.pt::before{content:'';width:3px;height:3px;background:var(--gdim);flex-shrink:0;}
-.pt::after{content:'';flex:1;height:1px;background:var(--border);margin-left:4px;}
+  /* Scanline overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.08) 2px,
+      rgba(0,0,0,0.08) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
 
-/* LAMPS */
-.lamp-row{display:flex;align-items:center;gap:7px;margin-bottom:7px;}
-.lamp{width:9px;height:9px;border-radius:50%;flex-shrink:0;background:#1a1a1a;border:1px solid #2a2a2a;transition:background .3s,box-shadow .3s;}
-.lamp.g{background:var(--green);box-shadow:0 0 5px var(--green);border-color:var(--green);}
-.lamp.a{background:var(--amber);box-shadow:0 0 5px var(--amber);border-color:var(--amber);}
-.lamp.r{background:var(--red);box-shadow:0 0 5px var(--red);border-color:var(--red);}
-.lamp-lbl{font-size:9px;color:var(--tdim);flex:1;letter-spacing:1px;}
-.lamp-val{font-size:9px;color:var(--thi);}
+  /* ── TOP BAR ─────────────────────────────────────────────────── */
+  #topbar {
+    background: var(--surface);
+    border-bottom: 2px solid var(--amber);
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
 
-/* COUNTDOWN */
-.countdown{font-size:34px;font-weight:400;color:var(--ghi);letter-spacing:5px;text-align:center;padding:6px 0;font-family:var(--mono);}
-.cd-lbl{font-size:8px;text-align:center;color:var(--tdim);letter-spacing:3px;text-transform:uppercase;}
-.prog-bg{background:var(--bg3);border:1px solid var(--border);border-radius:1px;height:12px;margin:8px 0;overflow:hidden;}
-.prog-fill{height:100%;width:0%;background:var(--gdim);transition:width 1s linear;border-radius:1px;}
-.prog-fill.run{background:var(--green);}
+  .logo {
+    font-family: var(--display);
+    font-size: 20px;
+    font-weight: 900;
+    color: var(--amber);
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    line-height: 1;
+  }
+  .logo span {
+    font-size: 10px;
+    letter-spacing: 6px;
+    color: var(--muted);
+    display: block;
+    margin-top: 2px;
+  }
 
-/* BUTTONS */
-.btn{width:100%;padding:8px;font-family:var(--mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;cursor:pointer;border-radius:1px;border:1px solid;margin-bottom:5px;transition:background .15s,opacity .15s;}
-.btn-start{background:#0a220a;border-color:var(--green);color:var(--ghi);}
-.btn-start:hover:not(:disabled){background:#143214;}
-.btn-stop{background:#220a0a;border-color:var(--red);color:#ff9090;}
-.btn-stop:hover:not(:disabled){background:#3a1010;}
-.btn:disabled{opacity:.3;cursor:not-allowed;}
+  .status-cluster {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
 
-/* DIRECTION */
-.dir-wrap{display:flex;gap:4px;margin-top:2px;}
-.dir-btn{flex:1;padding:6px;font-family:var(--mono);font-size:9px;letter-spacing:1px;cursor:pointer;border-radius:1px;border:1px solid var(--border);background:#111;color:var(--tdim);text-align:center;transition:all .15s;}
-.dir-btn.active{background:#0a2e20;border-color:#3a8a60;color:#76ffcc;}
+  .pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--muted);
+    transition: background 0.3s;
+  }
+  .dot.green  { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .dot.amber  { background: var(--amber); box-shadow: 0 0 6px var(--amber); animation: pulse 1s infinite; }
+  .dot.red    { background: var(--red);   box-shadow: 0 0 6px var(--red); }
 
-/* MODE GRID */
-.mode-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-bottom:8px;}
-.mode-btn{background:#0a0e0a;border:1px solid var(--border);color:var(--tdim);font-family:var(--mono);font-size:11px;padding:7px 0;cursor:pointer;border-radius:1px;text-align:center;transition:all .15s;}
-.mode-btn:hover{border-color:var(--gdim);color:var(--text);}
-.mode-btn.active{background:var(--gdim);border-color:var(--green);color:var(--ghi);}
-.mode-desc{font-size:9px;color:var(--tdim);padding:5px 7px;background:var(--bg3);border-radius:1px;min-height:30px;line-height:1.5;border:1px solid var(--border);}
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
 
-/* SLIDERS */
-.sl-row{margin-bottom:9px;}
-.sl-top{display:flex;justify-content:space-between;font-size:9px;color:var(--tdim);margin-bottom:3px;}
-.sl-val{color:var(--green);font-size:10px;}
-input[type=range]{width:100%;height:3px;accent-color:var(--green);background:#1a2a1a;border-radius:1px;cursor:pointer;outline:none;}
+  /* ── MAIN GRID ───────────────────────────────────────────────── */
+  #app {
+    display: grid;
+    grid-template-columns: 320px 1fr 300px;
+    grid-template-rows: auto auto;
+    gap: 12px;
+    padding: 12px;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
 
-/* PARAM CELLS */
-.param-cell{background:var(--bg3);border:1px solid var(--border);border-radius:1px;padding:7px 8px;transition:border-color .2s;}
-.param-cell:focus-within{border-color:var(--gdim);}
-.param-name{font-size:8px;color:var(--tdim);letter-spacing:2px;text-transform:uppercase;margin-bottom:5px;}
-.param-row{display:flex;align-items:center;gap:4px;}
-.param-val{font-size:14px;color:var(--ghi);flex:1;text-align:center;font-family:var(--mono);}
-.param-unit{font-size:9px;color:var(--tdim);}
-.incdec{background:#111;border:1px solid var(--border);color:var(--text);font-size:11px;padding:2px 7px;cursor:pointer;border-radius:1px;font-family:var(--mono);transition:border-color .15s;}
-.incdec:hover{border-color:var(--green);color:var(--ghi);}
+  /* ── PANELS ──────────────────────────────────────────────────── */
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .panel-header {
+    background: #0a1015;
+    border-bottom: 1px solid var(--border);
+    padding: 6px 12px;
+    font-family: var(--display);
+    font-size: 9px;
+    letter-spacing: 3px;
+    color: var(--amber);
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .panel-body { padding: 12px; }
 
-/* NUM INPUT */
-.num-in{background:var(--bg3);border:1px solid var(--border);color:var(--ghi);font-family:var(--mono);font-size:12px;padding:4px 6px;border-radius:1px;width:100%;text-align:right;outline:none;}
-.num-in:focus{border-color:var(--green);}
+  /* ── MODE SELECTOR ───────────────────────────────────────────── */
+  #mode-panel { grid-column: 1; grid-row: 1 / 3; }
 
-/* LOG */
-.log-box{background:var(--bg3);border:1px solid var(--border);border-radius:1px;padding:6px 8px;height:130px;overflow-y:auto;font-size:9px;color:var(--tdim);}
-.log-line{margin-bottom:3px;line-height:1.4;}
-.log-line .lt{color:var(--gdim);}
-.log-line .lv{color:var(--thi);}
-.log-line .le{color:var(--red);}
-.log-line .lw{color:var(--amber);}
+  .mode-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 6px;
+  }
 
-/* BROKER FORM */
-.broker-form{display:flex;flex-direction:column;gap:5px;}
-.field-lbl{font-size:8px;color:var(--tdim);letter-spacing:2px;text-transform:uppercase;margin-bottom:2px;}
-.field-in{background:var(--bg3);border:1px solid var(--border);color:var(--thi);font-family:var(--mono);font-size:10px;padding:5px 7px;border-radius:1px;width:100%;outline:none;}
-.field-in:focus{border-color:var(--gdim);}
-.btn-conn{width:100%;margin-top:4px;padding:7px;font-family:var(--mono);font-size:9px;letter-spacing:2px;text-transform:uppercase;cursor:pointer;border-radius:1px;border:1px solid var(--gdim);background:#0a200a;color:var(--ghi);transition:background .15s;}
-.btn-conn:hover{background:#143214;}
-.btn-disconn{border-color:#7a1a1a;background:var(--rdim);color:#ff9090;}
-.btn-disconn:hover{background:#5a1010;}
+  .mode-btn {
+    background: #0a1015;
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    padding: 10px 6px;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.15s;
+    position: relative;
+    overflow: hidden;
+  }
+  .mode-btn::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--amber);
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+  .mode-btn:hover::after { opacity: 0.05; }
+  .mode-btn.active {
+    border-color: var(--amber);
+    background: rgba(245,158,11,0.08);
+  }
+  .mode-btn.active .mode-name { color: var(--amber); }
+  .mode-btn.locked { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
 
-/* MAIN GRID */
-.main-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px;}
-.card{background:var(--bg2);border:1px solid var(--border);border-radius:2px;padding:12px;}
-.card-full{grid-column:1/-1;}
-.card-title{font-size:8px;letter-spacing:3px;text-transform:uppercase;color:var(--tdim);margin-bottom:10px;display:flex;align-items:center;gap:5px;}
-.card-title::before{content:'';width:3px;height:3px;background:var(--gdim);}
+  .mode-name {
+    font-family: var(--display);
+    font-size: 14px;
+    font-weight: 800;
+    color: var(--text);
+    display: block;
+    margin-bottom: 3px;
+  }
+  .mode-tag {
+    font-size: 9px;
+    color: var(--muted);
+    letter-spacing: 0.5px;
+    line-height: 1.3;
+    display: block;
+  }
 
-/* PARAM GRIDS */
-.pg3{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
-.pg2{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;}
+  .mode-desc {
+    margin-top: 10px;
+    padding: 10px;
+    background: #0a1015;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--amber);
+    font-size: 11px;
+    color: var(--text-dim);
+    line-height: 1.6;
+    min-height: 56px;
+  }
+  .mode-desc strong { color: var(--amber); }
 
-/* SEPARATOR */
-hr.sep{border:none;border-top:1px solid var(--border);margin:8px 0;}
+  /* Motor controls */
+  .ctrl-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 10px;
+  }
 
-/* TOTAL MMSS */
-.mmss-row{display:flex;gap:6px;align-items:flex-end;}
-.mmss-field{flex:1;}
+  .btn {
+    padding: 12px;
+    border: 1px solid;
+    border-radius: 2px;
+    cursor: pointer;
+    font-family: var(--display);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    transition: all 0.15s;
+    background: transparent;
+  }
+  .btn-start {
+    border-color: var(--green);
+    color: var(--green);
+  }
+  .btn-start:hover:not(:disabled) {
+    background: rgba(34,197,94,0.12);
+    box-shadow: 0 0 12px rgba(34,197,94,0.2);
+  }
+  .btn-stop {
+    border-color: var(--red);
+    color: var(--red);
+  }
+  .btn-stop:hover:not(:disabled) {
+    background: rgba(239,68,68,0.12);
+    box-shadow: 0 0 12px rgba(239,68,68,0.2);
+  }
+  .btn:disabled {
+    opacity: 0.25;
+    cursor: not-allowed;
+  }
+  .btn-full {
+    width: 100%;
+    padding: 10px;
+    margin-top: 6px;
+  }
+  .btn-amber {
+    border-color: var(--amber);
+    color: var(--amber);
+  }
+  .btn-amber:hover:not(:disabled) {
+    background: rgba(245,158,11,0.1);
+  }
+  .btn-blue {
+    border-color: var(--blue);
+    color: var(--blue);
+  }
+  .btn-blue:hover:not(:disabled) {
+    background: rgba(56,189,248,0.1);
+  }
 
-/* STATUS BAR */
-.statbar{background:#090d09;border-top:1px solid var(--border);padding:4px 16px;display:flex;gap:20px;font-size:8px;color:var(--tdim);letter-spacing:1px;}
-.statbar span{color:var(--tdim);}
-.statbar .sv{color:var(--green);}
+  /* ── MIDDLE COLUMN ───────────────────────────────────────────── */
+  #mid-col {
+    grid-column: 2;
+    grid-row: 1 / 3;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
 
-/* SCROLLBAR */
-::-webkit-scrollbar{width:4px;}
-::-webkit-scrollbar-track{background:var(--bg3);}
-::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
+  /* Progress / Status */
+  .big-countdown {
+    font-family: var(--display);
+    font-size: 64px;
+    font-weight: 900;
+    color: var(--amber);
+    text-align: center;
+    letter-spacing: 8px;
+    line-height: 1;
+    padding: 16px 0 8px;
+    text-shadow: 0 0 30px rgba(245,158,11,0.4);
+    transition: color 0.3s;
+  }
+  .big-countdown.stopped { color: var(--muted); text-shadow: none; }
+  .big-countdown.completed { color: var(--green); text-shadow: 0 0 30px rgba(34,197,94,0.4); }
+
+  .seg-label {
+    text-align: center;
+    font-size: 12px;
+    letter-spacing: 4px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  .seg-label .seg-hi { color: var(--amber); font-weight: bold; }
+
+  .progress-track {
+    height: 6px;
+    background: var(--border);
+    border-radius: 0;
+    margin: 0 12px 12px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--amber-dim), var(--amber));
+    width: 0%;
+    transition: width 0.5s linear;
+    box-shadow: 2px 0 8px var(--amber);
+  }
+
+  /* Config */
+  .cfg-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .field-group { display: flex; flex-direction: column; gap: 4px; }
+  .field-group.full { grid-column: 1 / -1; }
+
+  label {
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+  }
+
+  input[type=range] {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 3px;
+    background: var(--border);
+    outline: none;
+    border-radius: 0;
+    cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px; height: 14px;
+    background: var(--amber);
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 0 6px var(--amber);
+  }
+
+  input[type=text], input[type=number] {
+    background: #0a1015;
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    padding: 6px 8px;
+    width: 100%;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  input[type=text]:focus, input[type=number]:focus {
+    border-color: var(--amber);
+  }
+  input.warn { border-color: var(--red) !important; }
+
+  .val-display {
+    font-family: var(--display);
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--amber);
+    text-align: right;
+    min-width: 48px;
+  }
+
+  .range-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .toggle-row {
+    display: flex;
+    gap: 6px;
+  }
+  .dir-btn {
+    flex: 1;
+    padding: 8px;
+    border: 1px solid var(--border);
+    background: #0a1015;
+    color: var(--text-dim);
+    font-family: var(--display);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: all 0.15s;
+    border-radius: 2px;
+  }
+  .dir-btn.active-fwd { border-color: var(--green); color: var(--green); background: rgba(34,197,94,0.08); }
+  .dir-btn.active-rev { border-color: var(--red); color: var(--red); background: rgba(239,68,68,0.08); }
+
+  .warn-box {
+    background: rgba(239,68,68,0.08);
+    border: 1px solid rgba(239,68,68,0.4);
+    border-left: 3px solid var(--red);
+    padding: 6px 10px;
+    font-size: 11px;
+    color: #fca5a5;
+    border-radius: 2px;
+    display: none;
+    line-height: 1.5;
+  }
+  .warn-box.show { display: block; }
+
+  /* ── RIGHT COLUMN ────────────────────────────────────────────── */
+  #right-col {
+    grid-column: 3;
+    grid-row: 1 / 3;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  /* Activity log */
+  #log-body {
+    height: 280px;
+    overflow-y: auto;
+    font-size: 11px;
+    line-height: 1.8;
+    padding: 8px;
+    background: #060a0d;
+  }
+  #log-body::-webkit-scrollbar { width: 4px; }
+  #log-body::-webkit-scrollbar-track { background: transparent; }
+  #log-body::-webkit-scrollbar-thumb { background: var(--border); }
+
+  .log-entry { display: flex; gap: 8px; }
+  .log-time { color: var(--text-dim); min-width: 56px; flex-shrink: 0; }
+  .log-msg  { color: var(--text); }
+  .log-entry.ev-status .log-msg  { color: var(--green); }
+  .log-entry.ev-stop   .log-msg  { color: var(--red); }
+  .log-entry.ev-config .log-msg  { color: var(--blue); }
+  .log-entry.ev-warn   .log-msg  { color: #fbbf24; }
+  .log-entry.ev-conn   .log-msg  { color: var(--amber); }
+  .log-entry.ev-error  .log-msg  { color: var(--red); }
+
+  /* OLED override */
+  .oled-preview {
+    background: #0a1a06;
+    border: 2px solid #1e3d16;
+    border-radius: 4px;
+    padding: 10px 14px;
+    font-family: var(--mono);
+    font-size: 14px;
+    color: #b7f7a0;
+    text-shadow: 0 0 8px rgba(183,247,160,0.5);
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+    min-height: 60px;
+    line-height: 1.8;
+  }
+  .oled-preview .oled-cursor { animation: blink 1s step-end infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+  /* Param relevance */
+  .param-chip {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 2px;
+    font-size: 10px;
+    letter-spacing: 1px;
+    margin: 2px;
+    border: 1px solid;
+  }
+  .param-chip.used   { border-color: var(--amber); color: var(--amber); }
+  .param-chip.unused { border-color: var(--border); color: var(--text-dim); }
+
+  .params-used {
+    margin-top: 6px;
+    padding: 6px 8px;
+    background: #0a1015;
+    border: 1px solid var(--border);
+    border-radius: 2px;
+  }
+
+  /* divider */
+  .divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 8px 0;
+  }
+
+  /* connected/disconnected overlay */
+  #conn-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(8,11,15,0.92);
+    z-index: 9998;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 16px;
+  }
+  #conn-overlay.show { display: flex; }
+  .conn-spinner {
+    width: 48px; height: 48px;
+    border: 3px solid var(--border);
+    border-top-color: var(--amber);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .conn-label {
+    font-family: var(--display);
+    font-size: 13px;
+    letter-spacing: 4px;
+    color: var(--amber);
+  }
+
+  /* Raw MQTT toggle */
+  #raw-toggle {
+    font-size: 10px;
+    color: var(--text-dim);
+    cursor: pointer;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    background: none;
+    border: none;
+    font-family: var(--mono);
+    padding: 0;
+  }
+  #raw-toggle:hover { color: var(--amber); }
+
+  /* responsive */
+  @media (max-width: 1100px) {
+    #app { grid-template-columns: 280px 1fr 260px; }
+  }
+  @media (max-width: 900px) {
+    #app {
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: auto;
+    }
+    #mode-panel { grid-column: 1 / -1; grid-row: auto; }
+    #mid-col    { grid-column: 1; grid-row: auto; }
+    #right-col  { grid-column: 2; grid-row: auto; }
+  }
 </style>
 </head>
 <body>
 
-<!-- HEADER -->
-<div class="hdr">
-  <div class="hdr-l">
-    <div class="logo">TR</div>
-    <div>
-      <div class="hdr-title">Tube Rocker</div>
-      <div class="hdr-sub">Motor Control System &mdash; v5</div>
-    </div>
+<!-- Connection overlay -->
+<div id="conn-overlay" class="show">
+  <div class="conn-spinner"></div>
+  <div class="conn-label">CONNECTING TO BROKER</div>
+  <div style="font-size:11px;color:var(--text-dim);letter-spacing:2px;">TUBE ROCKER v5</div>
+</div>
+
+<!-- Top Bar -->
+<div id="topbar">
+  <div class="logo">
+    TUBE ROCKER
+    <span>ECKSTEIN — CONTROL DASHBOARD v5</span>
   </div>
-  <div class="hdr-r">
-    <span class="chip chip-off" id="chip-mqtt">MQTT Offline</span>
-    <span class="chip chip-off" id="chip-motor">Motor Idle</span>
-    <span id="clock">--:--:--</span>
+  <div class="status-cluster">
+    <div class="pill">
+      <div class="dot" id="dot-mqtt"></div>
+      <span id="lbl-mqtt">MQTT</span>
+    </div>
+    <div class="pill">
+      <div class="dot" id="dot-device"></div>
+      <span id="lbl-device">DEVICE</span>
+    </div>
+    <div class="pill" id="pill-motor">
+      <div class="dot" id="dot-motor"></div>
+      <span id="lbl-motor">IDLE</span>
+    </div>
   </div>
 </div>
 
-<!-- BODY -->
-<div class="body">
+<!-- Main App -->
+<div id="app">
 
-  <!-- LEFT COL -->
-  <div class="col">
-
-    <!-- System Status -->
-    <div class="panel">
-      <div class="pt">System Status</div>
-      <div class="lamp-row"><div class="lamp" id="lamp-mqtt"></div><span class="lamp-lbl">MQTT Broker</span><span class="lamp-val" id="st-mqtt">Offline</span></div>
-      <div class="lamp-row"><div class="lamp" id="lamp-dev"></div><span class="lamp-lbl">Device</span><span class="lamp-val" id="st-dev">Offline</span></div>
-      <div class="lamp-row"><div class="lamp" id="lamp-motor"></div><span class="lamp-lbl">Motor</span><span class="lamp-val" id="st-motor">Idle</span></div>
+  <!-- ── LEFT: Mode Selector ─────────────────────── -->
+  <div class="panel" id="mode-panel">
+    <div class="panel-header">
+      MODE SELECTOR
+      <span style="color:var(--text-dim);font-family:var(--mono);font-size:9px;letter-spacing:1px;" id="mode-sel-label">F1 SELECTED</span>
     </div>
+    <div class="panel-body">
+      <div class="mode-grid" id="mode-grid"></div>
 
-    <!-- Countdown -->
-    <div class="panel">
-      <div class="pt">Time Remaining</div>
-      <div class="countdown" id="countdown">--:--</div>
-      <div class="cd-lbl" id="cd-seg">Stopped</div>
-      <div class="prog-bg"><div class="prog-fill" id="prog"></div></div>
+      <div class="mode-desc" id="mode-desc-box">
+        Select a mode to see its description.
+      </div>
+
+      <div class="params-used" id="params-used-box" style="margin-top:6px;"></div>
+
+      <hr class="divider">
+
+      <div class="ctrl-row">
+        <button class="btn btn-start" id="btn-start" onclick="startMode()">▶ START</button>
+        <button class="btn btn-stop"  id="btn-stop"  onclick="stopMotor()" disabled>■ STOP</button>
+      </div>
     </div>
+  </div>
 
-    <!-- Controls -->
+  <!-- ── MIDDLE ──────────────────────────────────── -->
+  <div id="mid-col">
+
+    <!-- Progress / Status -->
     <div class="panel">
-      <div class="pt">Motor Controls</div>
-      <button class="btn btn-start" id="btn-start" onclick="doStart()" disabled>&#9654; Start</button>
-      <button class="btn btn-stop"  id="btn-stop"  onclick="doStop()"  disabled>&#9632; Stop</button>
-      <hr class="sep">
-      <div class="pt" style="margin-bottom:5px;">Direction</div>
-      <div class="dir-wrap">
-        <div class="dir-btn active" id="dir-fwd" onclick="setDir(1)">&#9658; FWD</div>
-        <div class="dir-btn"        id="dir-rev" onclick="setDir(0)">&#9668; REV</div>
+      <div class="panel-header">
+        LIVE STATUS
+        <span id="active-mode-lbl" style="color:var(--text-dim);font-family:var(--mono);font-size:10px;">—</span>
+      </div>
+      <div class="big-countdown stopped" id="big-clock">--:--</div>
+      <div class="seg-label" id="seg-lbl">STANDBY</div>
+      <div class="progress-track">
+        <div class="progress-fill" id="prog-fill"></div>
       </div>
     </div>
 
-    <!-- Event Log -->
+    <!-- Config -->
+    <div class="panel">
+      <div class="panel-header">
+        CONFIGURATION
+        <span style="font-family:var(--mono);font-size:9px;color:var(--text-dim);" id="lock-lbl"></span>
+      </div>
+      <div class="panel-body">
+        <div class="cfg-grid" id="cfg-panel">
+
+          <!-- Speed -->
+          <div class="field-group">
+            <label>SPEED %</label>
+            <div class="range-row">
+              <input type="range" id="sl-speed" min="1" max="100" value="50" oninput="onSpeedChange(this.value)">
+              <div class="val-display" id="val-speed">50</div>
+            </div>
+          </div>
+
+          <!-- Total Duration -->
+          <div class="field-group">
+            <label>TOTAL DURATION (MM:SS)</label>
+            <input type="text" id="inp-total" value="01:00" maxlength="5"
+                   oninput="onTotalChange(this.value)" placeholder="MM:SS">
+          </div>
+
+          <!-- Direction -->
+          <div class="field-group">
+            <label>DIRECTION</label>
+            <div class="toggle-row">
+              <button class="dir-btn active-fwd" id="dir-fwd" onclick="setDirection(1)">▶ FWD</button>
+              <button class="dir-btn" id="dir-rev" onclick="setDirection(0)">◀ REV</button>
+            </div>
+          </div>
+
+          <!-- Pause -->
+          <div class="field-group">
+            <label>PAUSE DURATION (sec)</label>
+            <div class="range-row">
+              <input type="range" id="sl-pause" min="1" max="60" value="2" oninput="onPauseChange(this.value)">
+              <div class="val-display" id="val-pause">2</div>
+            </div>
+          </div>
+
+          <!-- Shake Count -->
+          <div class="field-group">
+            <label>SHAKE COUNT</label>
+            <div class="range-row">
+              <input type="range" id="sl-shake" min="1" max="20" value="3" oninput="onShakeChange(this.value)">
+              <div class="val-display" id="val-shake">3</div>
+            </div>
+          </div>
+
+          <!-- Warning -->
+          <div class="field-group full">
+            <div class="warn-box" id="warn-box"></div>
+          </div>
+
+          <!-- Send All -->
+          <div class="field-group full">
+            <button class="btn btn-amber btn-full" id="btn-send-cfg" onclick="sendAllConfig()">
+              ↑ PUSH ALL CONFIG TO DEVICE
+            </button>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+  </div><!-- end mid-col -->
+
+  <!-- ── RIGHT ───────────────────────────────────── -->
+  <div id="right-col">
+
+    <!-- OLED Override -->
+    <div class="panel">
+      <div class="panel-header">OLED DISPLAY OVERRIDE</div>
+      <div class="panel-body">
+        <div class="oled-preview" id="oled-prev">
+          <div id="oled-l1">Tube Rocker<span class="oled-cursor">_</span></div>
+          <div id="oled-l2">by Eckstein</div>
+        </div>
+        <div class="field-group" style="margin-bottom:6px;">
+          <label>LINE 1 (max 16 chars)</label>
+          <input type="text" id="inp-l1" maxlength="16" value="Tube Rocker" oninput="updateOledPreview()">
+        </div>
+        <div class="field-group" style="margin-bottom:8px;">
+          <label>LINE 2 (max 16 chars)</label>
+          <input type="text" id="inp-l2" maxlength="16" value="by Eckstein" oninput="updateOledPreview()">
+        </div>
+        <button class="btn btn-blue btn-full" id="btn-oled" onclick="sendOled()">
+          ↑ SEND TO DISPLAY
+        </button>
+      </div>
+    </div>
+
+    <!-- Activity Log -->
     <div class="panel" style="flex:1;">
-      <div class="pt">Event Log</div>
-      <div class="log-box" id="log"></div>
+      <div class="panel-header">
+        ACTIVITY LOG
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button id="raw-toggle" onclick="toggleRaw()">RAW: OFF</button>
+          <button style="font-size:10px;color:var(--text-dim);cursor:pointer;letter-spacing:1px;text-transform:uppercase;background:none;border:none;font-family:var(--mono);" onclick="clearLog()">CLR</button>
+        </div>
+      </div>
+      <div id="log-body"></div>
     </div>
 
-  </div><!-- /left -->
+  </div><!-- end right-col -->
 
-  <!-- MAIN -->
-  <div class="main">
-    <div class="main-grid">
-
-      <!-- Mode Selection -->
-      <div class="card card-full">
-        <div class="card-title">Mode Selection</div>
-        <div class="mode-grid" id="mode-grid"></div>
-        <div class="mode-desc" id="mode-desc">F1 — Continuous spin, single direction. No events.</div>
-      </div>
-
-      <!-- Speed -->
-      <div class="card">
-        <div class="card-title">Speed</div>
-        <div class="sl-row">
-          <div class="sl-top"><span>Motor Speed</span><span class="sl-val" id="spd-val">50%</span></div>
-          <input type="range" id="spd-sl" min="0" max="100" step="1" value="50" oninput="setSpeed(this.value)">
-        </div>
-        <div class="param-cell" style="margin-top:6px;">
-          <div class="param-name">Speed %</div>
-          <div class="param-row">
-            <button class="incdec" onclick="adjSpeed(-5)">-</button>
-            <span class="param-val" id="spd-num">50</span>
-            <span class="param-unit">%</span>
-            <button class="incdec" onclick="adjSpeed(5)">+</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Total Duration -->
-      <div class="card">
-        <div class="card-title">Total Duration</div>
-        <div class="sl-row">
-          <div class="sl-top"><span>Minutes (0–99)</span><span class="sl-val" id="total-sl-val">01:00</span></div>
-          <input type="range" id="total-sl" min="0" max="99" step="1" value="1" oninput="syncTotalFromSlider(this.value)">
-        </div>
-        <div class="mmss-row" style="margin-top:8px;">
-          <div class="mmss-field">
-            <div class="field-lbl">Min (MM)</div>
-            <input class="num-in" type="number" id="in-mm" min="0" max="99" value="1" oninput="syncTotalFromInput()">
-          </div>
-          <div class="mmss-field">
-            <div class="field-lbl">Sec (SS)</div>
-            <input class="num-in" type="number" id="in-ss" min="0" max="59" value="0" oninput="syncTotalFromInput()">
-          </div>
-        </div>
-      </div>
-
-      <!-- Pause Config -->
-      <div class="card">
-        <div class="card-title">Pause Config</div>
-        <div class="pg3">
-          <div class="param-cell">
-            <div class="param-name">Pause 1</div>
-            <div class="param-row">
-              <button class="incdec" onclick="adjPause(0,-1)">-</button>
-              <span class="param-val" id="p0">2</span>
-              <span class="param-unit">s</span>
-              <button class="incdec" onclick="adjPause(0,1)">+</button>
-            </div>
-          </div>
-          <div class="param-cell">
-            <div class="param-name">Pause 2</div>
-            <div class="param-row">
-              <button class="incdec" onclick="adjPause(1,-1)">-</button>
-              <span class="param-val" id="p1">2</span>
-              <span class="param-unit">s</span>
-              <button class="incdec" onclick="adjPause(1,1)">+</button>
-            </div>
-          </div>
-          <div class="param-cell">
-            <div class="param-name">Pause 3</div>
-            <div class="param-row">
-              <button class="incdec" onclick="adjPause(2,-1)">-</button>
-              <span class="param-val" id="p2">2</span>
-              <span class="param-unit">s</span>
-              <button class="incdec" onclick="adjPause(2,1)">+</button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Shake Config -->
-      <div class="card">
-        <div class="card-title">Shake Config</div>
-        <div class="pg3">
-          <div class="param-cell">
-            <div class="param-name">Shake 1</div>
-            <div class="param-row">
-              <button class="incdec" onclick="adjShake(0,-1)">-</button>
-              <span class="param-val" id="s0">3</span>
-              <span class="param-unit">x</span>
-              <button class="incdec" onclick="adjShake(0,1)">+</button>
-            </div>
-          </div>
-          <div class="param-cell">
-            <div class="param-name">Shake 2</div>
-            <div class="param-row">
-              <button class="incdec" onclick="adjShake(1,-1)">-</button>
-              <span class="param-val" id="s1">3</span>
-              <span class="param-unit">x</span>
-              <button class="incdec" onclick="adjShake(1,1)">+</button>
-            </div>
-          </div>
-          <div class="param-cell">
-            <div class="param-name">Shake 3</div>
-            <div class="param-row">
-              <button class="incdec" onclick="adjShake(2,-1)">-</button>
-              <span class="param-val" id="s2">3</span>
-              <span class="param-unit">x</span>
-              <button class="incdec" onclick="adjShake(2,1)">+</button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-    </div><!-- /main-grid -->
-  </div><!-- /main -->
-
-  <!-- RIGHT COL -->
-  <div class="col">
-
-    <!-- Broker Config -->
-    <div class="panel">
-      <div class="pt">MQTT Broker</div>
-      <div class="broker-form">
-        <div>
-          <div class="field-lbl">WebSocket URL</div>
-          <input class="field-in" id="in-url" type="text" value="wss://29d1db5d807d40109f45b518b9d3017d.s1.eu.hivemq.cloud:8884/mqtt" placeholder="wss://host:port/mqtt">
-        </div>
-        <div>
-          <div class="field-lbl">Username</div>
-          <input class="field-in" id="in-user" type="text" value="sanjana_tuberocker">
-        </div>
-        <div>
-          <div class="field-lbl">Password</div>
-          <input class="field-in" id="in-pass" type="password" value="Sanjana_tuberocker01">
-        </div>
-        <div>
-          <div class="field-lbl">Client ID</div>
-          <input class="field-in" id="in-cid" type="text" value="dashboard_001">
-        </div>
-        <button class="btn-conn" id="btn-conn" onclick="toggleConnect()">Connect</button>
-      </div>
-    </div>
-
-    <!-- Topics Monitor -->
-    <div class="panel">
-      <div class="pt">Topic Monitor</div>
-      <div style="display:flex;flex-direction:column;gap:5px;">
-        <div class="lamp-row"><div class="lamp" id="lmp-status"></div><span class="lamp-lbl" style="font-size:8px;">motor/status</span><span class="lamp-val" id="mon-status">—</span></div>
-        <div class="lamp-row"><div class="lamp" id="lmp-prog"></div><span class="lamp-lbl" style="font-size:8px;">motor/progress</span><span class="lamp-val" id="mon-prog">—</span></div>
-        <div class="lamp-row"><div class="lamp" id="lmp-devst"></div><span class="lamp-lbl" style="font-size:8px;">device/status</span><span class="lamp-val" id="mon-devst">—</span></div>
-      </div>
-    </div>
-
-    <!-- Push Config -->
-    <div class="panel">
-      <div class="pt">Push Config to Device</div>
-      <button class="btn btn-start" style="margin-bottom:5px;font-size:9px;" onclick="pushAllConfig()">&#8593; Push All Config</button>
-      <div style="font-size:8px;color:var(--tdim);line-height:1.6;margin-top:4px;">
-        Sends speed, direction, pause, shake, and total time to device over MQTT. Motor must be idle.
-      </div>
-    </div>
-
-    <!-- Received Messages -->
-    <div class="panel" style="flex:1;">
-      <div class="pt">Received Messages</div>
-      <div class="log-box" id="rx-log" style="height:160px;"></div>
-    </div>
-
-  </div><!-- /right -->
-
-</div><!-- /body -->
-
-<!-- STATUS BAR -->
-<div class="statbar">
-  <span>BROKER <span class="sv" id="sb-broker">—</span></span>
-  <span>MODE <span class="sv" id="sb-mode">F1</span></span>
-  <span>SPEED <span class="sv" id="sb-spd">50%</span></span>
-  <span>TOTAL <span class="sv" id="sb-total">01:00</span></span>
-  <span>DIR <span class="sv" id="sb-dir">FWD</span></span>
-  <span>PAUSE <span class="sv" id="sb-pause">2/2/2 s</span></span>
-  <span>SHAKE <span class="sv" id="sb-shake">3/3/3 x</span></span>
-</div>
+</div><!-- end app -->
 
 <script>
-// ── State ────────────────────────────────────────────────────────────────
-const S = {
-  mode: 0,
-  speed: 50,
-  dir: 1,
-  pause: [2, 2, 2],
-  shake: [3, 3, 3],
-  mm: 1, ss: 0,
-  running: false,
-  totalMs: 60000,
-  remaining: 0,
-  mqttConnected: false,
-};
+// ═══════════════════════════════════════════════════════
+// CONSTANTS
+// ═══════════════════════════════════════════════════════
+
+const BROKER    = 'wss://29d1db5d807d40109f45b518b9d3017d.s1.eu.hivemq.cloud:8884/mqtt';
+const MQTT_USER = 'sanjana_tuberocker';
+const MQTT_PASS = 'Sanjana_tuberocker01';
+const CLIENT_ID = 'dashboard_' + Math.random().toString(16).slice(2,10);
 
 const TOPICS = {
-  CTRL:     'motor/control',
-  MODE:     'motor/mode',
-  STATUS:   'motor/status',
-  PROGRESS: 'motor/progress',
-  DISPLAY:  'display/text',
-  DEVST:    'device/status',
-  CFG_SPD:  'motor/config/speed',
-  CFG_DIR:  'motor/config/direction',
-  CFG_PAUSE:'motor/config/pause_sec',
-  CFG_SHAKE:'motor/config/shake_cnt',
-  CFG_TOTAL:'motor/config/total_ms',
+  CTRL:      'motor/control',
+  MODE:      'motor/mode',
+  STATUS:    'motor/status',
+  PROGRESS:  'motor/progress',
+  DISP:      'display/text',
+  DEV:       'device/status',
+  CFG_SPD:   'motor/config/speed',
+  CFG_DIR:   'motor/config/direction',
+  CFG_PAUSE: 'motor/config/pause_sec',
+  CFG_SHAKE: 'motor/config/shake_cnt',
+  CFG_TOTAL: 'motor/config/total_ms',
 };
 
-const MODE_DESCS = [
-  'F1 — Continuous spin, single direction. No events.',
-  'F2 — Spin → Pause1 at midpoint → Spin.',
-  'F3 — Spin → Pause1 → Spin → Pause2 → Spin.',
-  'F4 — Spin → Shake1 → Spin → Pause1 → Spin.',
-  'F5 — Spin → Shake1 → Spin → Pause1 → Spin → Shake2 → Spin.',
-  'F6 — Spin → Shake1 → Shake2 → Shake3 → Spin.',
-  'F7 — Repeating half-cycles with 3 pauses each direction.',
-  'F8 — Repeating half-cycles: Shake1 + Shake2 + Pause1 each direction.',
-  'F9 — Repeating half-cycles with 3 shakes each direction.',
+const SHAKE_CYCLE_MS = 1020; // 2*500 + 2*10
+
+const MODE_INFO = [
+  {
+    name: 'F1', tag: 'Continuous',
+    desc: '<strong>Spin only.</strong> Motor runs at set speed in one direction for the full duration. No interruptions.',
+    uses: ['speed','direction','total'],
+  },
+  {
+    name: 'F2', tag: 'Single Pause',
+    desc: '<strong>Spin → Pause → Spin.</strong> One pause at the midpoint (T/2). Resumes and runs to completion.',
+    uses: ['speed','direction','total','pause'],
+  },
+  {
+    name: 'F3', tag: 'Double Pause',
+    desc: '<strong>Spin → Pause → Spin → Pause → Spin.</strong> Two pauses at T/3 marks.',
+    uses: ['speed','direction','total','pause'],
+  },
+  {
+    name: 'F4', tag: 'Shake + Pause',
+    desc: '<strong>Spin → Shake → Spin → Pause → Spin.</strong> Shake at T/3, pause at 2T/3.',
+    uses: ['speed','direction','total','pause','shake'],
+  },
+  {
+    name: 'F5', tag: 'Shake-Pause-Shake',
+    desc: '<strong>Spin → Shake → Spin → Pause → Spin → Shake → Spin.</strong> Events at each T/4 mark.',
+    uses: ['speed','direction','total','pause','shake'],
+  },
+  {
+    name: 'F6', tag: 'Triple Shake',
+    desc: '<strong>Spin → Shake × 3 evenly spaced.</strong> Three shakes at T/4, T/2, 3T/4. No pauses.',
+    uses: ['speed','direction','total','shake'],
+  },
+  {
+    name: 'F7', tag: 'Bi-dir + 3 Pauses',
+    desc: '<strong>Repeating half-cycles flipping direction.</strong> Each half has 3 pauses at quarter marks within it.',
+    uses: ['speed','total','pause'],
+  },
+  {
+    name: 'F8', tag: 'Bi-dir Shake+Pause',
+    desc: '<strong>Repeating half-cycles flipping direction.</strong> Each half: Shake → Shake → Pause. Runs continuously.',
+    uses: ['speed','total','pause','shake'],
+  },
+  {
+    name: 'F9', tag: 'Bi-dir Triple Shake',
+    desc: '<strong>Repeating half-cycles flipping direction.</strong> Each half has 3 shakes. High-agitation mode.',
+    uses: ['speed','total','shake'],
+  },
 ];
 
-let mqttClient = null;
-let cdTimer = null;
+// ═══════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════
 
-// ── Helpers ──────────────────────────────────────────────────────────────
-function pad(n) { return String(Math.floor(n)).padStart(2, '0'); }
-function fmtMMSS(ms) {
-  let s = Math.max(0, Math.floor(ms / 1000));
-  return pad(Math.floor(s / 60)) + ':' + pad(s % 60);
-}
-function addLog(type, msg) {
-  const box = document.getElementById('log');
-  const d = document.createElement('div');
-  d.className = 'log-line';
-  const now = new Date();
-  const ts = pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
-  const cls = type === 'ERR' ? 'le' : type === 'WARN' ? 'lw' : 'lt';
-  d.innerHTML = `<span class="${cls}">[${type} ${ts}]</span> <span class="lv">${msg}</span>`;
-  box.appendChild(d);
-  box.scrollTop = box.scrollHeight;
-}
-function addRxLog(topic, payload) {
-  const box = document.getElementById('rx-log');
-  const d = document.createElement('div');
-  d.className = 'log-line';
-  const now = new Date();
-  const ts = pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
-  d.innerHTML = `<span class="lt">[${ts}]</span> <span style="color:var(--gdim)">${topic}</span> <span class="lv">${payload}</span>`;
-  box.appendChild(d);
-  box.scrollTop = box.scrollHeight;
+let client       = null;
+let motorRunning = false;
+let deviceOnline = false;
+let mqttConn     = false;
+let selectedMode = 0;
+let showRaw      = false;
+let totalMs      = 60000;
+let startedAt    = null;
+let progressTimer= null;
+let direction    = 1; // 1=fwd, 0=rev
+let speedPct     = 50;
+let pauseSec     = 2;
+let shakeCount   = 3;
+
+const LS_KEY = 'tuberocker_cfg';
+
+// ═══════════════════════════════════════════════════════
+// PERSISTENCE
+// ═══════════════════════════════════════════════════════
+
+function saveLocal() {
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify({
+      speedPct, direction, pauseSec, shakeCount,
+      totalMs, selectedMode,
+      oledL1: document.getElementById('inp-l1').value,
+      oledL2: document.getElementById('inp-l2').value,
+    }));
+  } catch(e) {}
 }
 
-// ── Clock ─────────────────────────────────────────────────────────────────
-setInterval(() => {
-  const n = new Date();
-  document.getElementById('clock').textContent =
-    pad(n.getHours()) + ':' + pad(n.getMinutes()) + ':' + pad(n.getSeconds());
-}, 1000);
+function loadLocal() {
+  try {
+    const d = JSON.parse(localStorage.getItem(LS_KEY) || 'null');
+    if (!d) return;
+    speedPct    = d.speedPct    ?? 50;
+    direction   = d.direction   ?? 1;
+    pauseSec    = d.pauseSec    ?? 2;
+    shakeCount  = d.shakeCount  ?? 3;
+    totalMs     = d.totalMs     ?? 60000;
+    selectedMode= d.selectedMode ?? 0;
 
-// ── Mode grid ─────────────────────────────────────────────────────────────
-function buildModes() {
-  const g = document.getElementById('mode-grid');
-  g.innerHTML = '';
-  for (let i = 0; i < 9; i++) {
-    const b = document.createElement('button');
-    b.className = 'mode-btn' + (S.mode === i ? ' active' : '');
-    b.textContent = 'F' + (i + 1);
-    b.onclick = () => selectMode(i);
-    g.appendChild(b);
+    document.getElementById('sl-speed').value  = speedPct;
+    document.getElementById('val-speed').textContent = speedPct;
+    document.getElementById('sl-pause').value  = pauseSec;
+    document.getElementById('val-pause').textContent = pauseSec;
+    document.getElementById('sl-shake').value  = shakeCount;
+    document.getElementById('val-shake').textContent = shakeCount;
+    document.getElementById('inp-total').value = msToMMSS(totalMs);
+
+    if (d.oledL1) document.getElementById('inp-l1').value = d.oledL1;
+    if (d.oledL2) document.getElementById('inp-l2').value = d.oledL2;
+
+    updateDir(direction);
+    updateOledPreview();
+  } catch(e) {}
+}
+
+// ═══════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════
+
+function msToMMSS(ms) {
+  const s = Math.floor(ms / 1000);
+  return String(Math.floor(s/60)).padStart(2,'0') + ':' + String(s%60).padStart(2,'0');
+}
+
+function mmssToMs(str) {
+  const m = str.match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return null;
+  const mm = parseInt(m[1]), ss = parseInt(m[2]);
+  if (ss > 59 || mm > 99) return null;
+  return (mm*60 + ss)*1000;
+}
+
+function now() {
+  return new Date().toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+}
+
+// ── Validation ──────────────────────────────────────
+function getWindowMs(modeIdx) {
+  const T = totalMs, half = T/2;
+  switch(modeIdx) {
+    case 0: return T;
+    case 1: return T/2;
+    case 2: return T/3;
+    case 3: return T/3;
+    case 4: return T/4;
+    case 5: return T/4;
+    case 6: return half/4;
+    case 7: return half/4;
+    case 8: return half/4;
+    default: return T;
   }
 }
+
+function validateConfig() {
+  const m   = MODE_INFO[selectedMode];
+  const win = getWindowMs(selectedMode);
+  const maxPause = Math.floor(win/1000);
+  const maxShake = Math.floor(win/SHAKE_CYCLE_MS);
+  const warnings = [];
+
+  if (m.uses.includes('pause')) {
+    if (pauseSec > maxPause)
+      warnings.push(`⚠ Pause ${pauseSec}s exceeds window (max ${maxPause}s for ${m.name})`);
+  }
+  if (m.uses.includes('shake')) {
+    if (shakeCount > maxShake)
+      warnings.push(`⚠ Shake count ${shakeCount} exceeds window (max ${maxShake} for ${m.name})`);
+  }
+
+  const warnBox = document.getElementById('warn-box');
+  if (warnings.length) {
+    warnBox.innerHTML = warnings.join('<br>');
+    warnBox.classList.add('show');
+  } else {
+    warnBox.classList.remove('show');
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// UI — MODE GRID
+// ═══════════════════════════════════════════════════════
+
+function buildModeGrid() {
+  const grid = document.getElementById('mode-grid');
+  grid.innerHTML = '';
+  MODE_INFO.forEach((m, i) => {
+    const btn = document.createElement('div');
+    btn.className = 'mode-btn' + (i === selectedMode ? ' active' : '');
+    btn.id = 'mode-btn-' + i;
+    btn.innerHTML = `<span class="mode-name">${m.name}</span><span class="mode-tag">${m.tag}</span>`;
+    btn.onclick = () => selectMode(i);
+    grid.appendChild(btn);
+  });
+}
+
 function selectMode(i) {
-  S.mode = i;
-  buildModes();
-  document.getElementById('mode-desc').textContent = MODE_DESCS[i];
-  updateStatusBar();
-}
-buildModes();
+  if (motorRunning) return;
+  selectedMode = i;
+  document.querySelectorAll('.mode-btn').forEach((b,j) => {
+    b.classList.toggle('active', j === i);
+  });
+  document.getElementById('mode-sel-label').textContent = MODE_INFO[i].name + ' SELECTED';
+  document.getElementById('mode-desc-box').innerHTML = MODE_INFO[i].desc;
 
-// ── Speed ─────────────────────────────────────────────────────────────────
-function setSpeed(v) {
-  S.speed = parseInt(v);
-  document.getElementById('spd-val').textContent = v + '%';
-  document.getElementById('spd-num').textContent = v;
-  document.getElementById('spd-sl').value = v;
-  updateStatusBar();
-}
-function adjSpeed(d) {
-  setSpeed(Math.min(100, Math.max(0, S.speed + d)));
-}
+  // Params used chips
+  const allParams = ['speed','direction','total','pause','shake'];
+  const used = MODE_INFO[i].uses;
+  document.getElementById('params-used-box').innerHTML =
+    allParams.map(p => `<span class="param-chip ${used.includes(p)?'used':'unused'}">${p.toUpperCase()}</span>`).join('');
 
-// ── Direction ─────────────────────────────────────────────────────────────
-function setDir(v) {
-  S.dir = v;
-  document.getElementById('dir-fwd').className = 'dir-btn' + (v === 1 ? ' active' : '');
-  document.getElementById('dir-rev').className = 'dir-btn' + (v === 0 ? ' active' : '');
-  document.getElementById('sb-dir').textContent = v === 1 ? 'FWD' : 'REV';
-}
+  // Dim sliders not relevant
+  const slPause = document.getElementById('sl-pause');
+  const slShake = document.getElementById('sl-shake');
+  slPause.parentElement.parentElement.style.opacity = used.includes('pause') ? '1' : '0.3';
+  slShake.parentElement.parentElement.style.opacity = used.includes('shake') ? '1' : '0.3';
+  document.getElementById('dir-fwd').parentElement.parentElement.style.opacity =
+    used.includes('direction') ? '1' : '0.3';
 
-// ── Total time ─────────────────────────────────────────────────────────────
-function syncTotalFromSlider(v) {
-  S.mm = parseInt(v); S.ss = 0;
-  document.getElementById('in-mm').value = S.mm;
-  document.getElementById('in-ss').value = 0;
-  document.getElementById('total-sl-val').textContent = pad(S.mm) + ':' + pad(S.ss);
-  S.totalMs = (S.mm * 60 + S.ss) * 1000;
-  updateStatusBar();
-}
-function syncTotalFromInput() {
-  S.mm = Math.min(99, Math.max(0, parseInt(document.getElementById('in-mm').value) || 0));
-  S.ss = Math.min(59, Math.max(0, parseInt(document.getElementById('in-ss').value) || 0));
-  document.getElementById('total-sl').value = S.mm;
-  document.getElementById('total-sl-val').textContent = pad(S.mm) + ':' + pad(S.ss);
-  S.totalMs = (S.mm * 60 + S.ss) * 1000;
-  updateStatusBar();
+  validateConfig();
+  saveLocal();
 }
 
-// ── Pause / Shake ──────────────────────────────────────────────────────────
-function adjPause(i, d) {
-  S.pause[i] = Math.max(1, S.pause[i] + d);
-  document.getElementById('p' + i).textContent = S.pause[i];
-  updateStatusBar();
-}
-function adjShake(i, d) {
-  S.shake[i] = Math.max(1, S.shake[i] + d);
-  document.getElementById('s' + i).textContent = S.shake[i];
-  updateStatusBar();
+// ═══════════════════════════════════════════════════════
+// UI — CONFIG CONTROLS
+// ═══════════════════════════════════════════════════════
+
+function onSpeedChange(v) {
+  speedPct = parseInt(v);
+  document.getElementById('val-speed').textContent = v;
+  saveLocal();
 }
 
-// ── Status bar ─────────────────────────────────────────────────────────────
-function updateStatusBar() {
-  document.getElementById('sb-mode').textContent = 'F' + (S.mode + 1);
-  document.getElementById('sb-spd').textContent  = S.speed + '%';
-  document.getElementById('sb-total').textContent = pad(S.mm) + ':' + pad(S.ss);
-  document.getElementById('sb-dir').textContent   = S.dir === 1 ? 'FWD' : 'REV';
-  document.getElementById('sb-pause').textContent = S.pause.join('/') + ' s';
-  document.getElementById('sb-shake').textContent = S.shake.join('/') + ' x';
+function onPauseChange(v) {
+  pauseSec = parseInt(v);
+  document.getElementById('val-pause').textContent = v;
+  validateConfig();
+  saveLocal();
 }
-updateStatusBar();
 
-// ── Motor running state ────────────────────────────────────────────────────
-function setRunning(r) {
-  S.running = r;
-  document.getElementById('btn-start').disabled = r || !S.mqttConnected;
-  document.getElementById('btn-stop').disabled  = !r || !S.mqttConnected;
-  document.getElementById('lamp-motor').className = 'lamp ' + (r ? 'g' : '');
-  document.getElementById('st-motor').textContent  = r ? 'Running' : 'Idle';
-  document.getElementById('chip-motor').className  = 'chip ' + (r ? 'chip-g' : 'chip-off');
-  document.getElementById('chip-motor').textContent = r ? 'Motor Running' : 'Motor Idle';
-  const pb = document.getElementById('prog');
-  pb.className = 'prog-fill' + (r ? ' run' : '');
-  if (!r) {
-    pb.style.width = '0%';
-    document.getElementById('countdown').textContent = '--:--';
-    document.getElementById('cd-seg').textContent = 'Stopped';
+function onShakeChange(v) {
+  shakeCount = parseInt(v);
+  document.getElementById('val-shake').textContent = v;
+  validateConfig();
+  saveLocal();
+}
+
+function onTotalChange(v) {
+  const ms = mmssToMs(v);
+  const inp = document.getElementById('inp-total');
+  if (ms !== null) {
+    totalMs = ms;
+    inp.classList.remove('warn');
+  } else {
+    inp.classList.add('warn');
+  }
+  validateConfig();
+  saveLocal();
+}
+
+function setDirection(d) {
+  direction = d;
+  updateDir(d);
+  saveLocal();
+}
+
+function updateDir(d) {
+  direction = d;
+  const fwd = document.getElementById('dir-fwd');
+  const rev = document.getElementById('dir-rev');
+  fwd.className = 'dir-btn' + (d === 1 ? ' active-fwd' : '');
+  rev.className = 'dir-btn' + (d === 0 ? ' active-rev' : '');
+}
+
+function sendAllConfig() {
+  if (!mqttConn) { addLog('Not connected to broker', 'ev-error'); return; }
+  const ms = mmssToMs(document.getElementById('inp-total').value);
+  if (ms === null) { addLog('Invalid total duration — fix MM:SS format', 'ev-warn'); return; }
+
+  publish(TOPICS.CFG_SPD,   String(speedPct));
+  publish(TOPICS.CFG_DIR,   direction === 1 ? 'fwd' : 'rev');
+  publish(TOPICS.CFG_PAUSE, String(pauseSec));
+  publish(TOPICS.CFG_SHAKE, String(shakeCount));
+  publish(TOPICS.CFG_TOTAL, msToMMSS(ms));
+
+  addLog(`Config pushed → spd:${speedPct}% dir:${direction?'FWD':'REV'} pause:${pauseSec}s shake:${shakeCount}x total:${msToMMSS(ms)}`, 'ev-config');
+}
+
+// ═══════════════════════════════════════════════════════
+// UI — MOTOR CONTROL
+// ═══════════════════════════════════════════════════════
+
+function startMode() {
+  if (motorRunning || !mqttConn) return;
+  const mode = MODE_INFO[selectedMode].name;
+  publish(TOPICS.MODE, mode);
+  addLog(`▶ Start command sent → ${mode}`, 'ev-status');
+}
+
+function stopMotor() {
+  if (!motorRunning) return;
+  publish(TOPICS.CTRL, 'stop');
+  addLog('■ Stop command sent', 'ev-stop');
+}
+
+// ═══════════════════════════════════════════════════════
+// UI — OLED
+// ═══════════════════════════════════════════════════════
+
+function updateOledPreview() {
+  const l1 = document.getElementById('inp-l1').value || '';
+  const l2 = document.getElementById('inp-l2').value || '';
+  document.getElementById('oled-l1').innerHTML = l1 + '<span class="oled-cursor">_</span>';
+  document.getElementById('oled-l2').textContent = l2;
+  saveLocal();
+}
+
+function sendOled() {
+  if (!mqttConn) { addLog('Not connected', 'ev-error'); return; }
+  const l1 = document.getElementById('inp-l1').value;
+  const l2 = document.getElementById('inp-l2').value;
+  publish(TOPICS.DISP, `${l1}|${l2}`);
+  addLog(`OLED → "${l1}" / "${l2}"`, 'ev-config');
+}
+
+// ═══════════════════════════════════════════════════════
+// UI — STATUS UPDATES
+// ═══════════════════════════════════════════════════════
+
+function setMotorStatus(status, modeName) {
+  const dot   = document.getElementById('dot-motor');
+  const lbl   = document.getElementById('lbl-motor');
+  const clock = document.getElementById('big-clock');
+  const seg   = document.getElementById('seg-lbl');
+  const actLbl= document.getElementById('active-mode-lbl');
+
+  switch(status) {
+    case 'running':
+      motorRunning = true;
+      dot.className = 'dot amber';
+      lbl.textContent = 'RUNNING';
+      clock.classList.remove('stopped','completed');
+      actLbl.textContent = modeName || '—';
+      startedAt = Date.now();
+      startProgressTimer();
+      lockUI(true);
+      break;
+    case 'stopped':
+      motorRunning = false;
+      dot.className = 'dot red';
+      lbl.textContent = 'STOPPED';
+      clock.classList.add('stopped');
+      clock.classList.remove('completed');
+      clock.textContent = '--:--';
+      seg.innerHTML = 'STOPPED';
+      document.getElementById('prog-fill').style.width = '0%';
+      actLbl.textContent = '—';
+      stopProgressTimer();
+      lockUI(false);
+      break;
+    case 'completed':
+      motorRunning = false;
+      dot.className = 'dot green';
+      lbl.textContent = 'DONE';
+      clock.classList.add('completed');
+      clock.classList.remove('stopped');
+      clock.textContent = '00:00';
+      seg.innerHTML = '<span style="color:var(--green)">✓ COMPLETED</span>';
+      document.getElementById('prog-fill').style.width = '100%';
+      actLbl.textContent = '—';
+      stopProgressTimer();
+      lockUI(false);
+      break;
   }
 }
 
-// ── Countdown timer (local simulation + MQTT progress override) ────────────
-function startCountdown() {
-  if (cdTimer) clearInterval(cdTimer);
-  S.remaining = S.totalMs;
-  cdTimer = setInterval(() => {
-    S.remaining -= 500;
-    if (S.remaining <= 0) { S.remaining = 0; clearInterval(cdTimer); }
-    const pct = Math.round((1 - S.remaining / S.totalMs) * 100);
-    document.getElementById('prog').style.width = pct + '%';
-    document.getElementById('countdown').textContent = fmtMMSS(S.remaining);
-  }, 500);
+function parseProgress(msg) {
+  // Format: "F3 01:42 left"
+  const m = msg.match(/^(\w+)\s+(\d{2}:\d{2})\s+left$/);
+  if (!m) return null;
+  return { mode: m[1], timeLeft: m[2] };
 }
 
-// ── Push all config to device ──────────────────────────────────────────────
-function pushAllConfig() {
-  if (!S.mqttConnected) { addLog('ERR', 'Not connected to MQTT'); return; }
-  if (S.running) { addLog('WARN', 'Cannot push config while motor is running'); return; }
-  mqPub(TOPICS.CFG_SPD,   String(S.speed));
-  mqPub(TOPICS.CFG_DIR,   S.dir === 1 ? 'fwd' : 'rev');
-  mqPub(TOPICS.CFG_PAUSE, String(S.pause[0]));
-  mqPub(TOPICS.CFG_SHAKE, String(S.shake[0]));
-  mqPub(TOPICS.CFG_TOTAL, pad(S.mm) + ':' + pad(S.ss));
-  addLog('CFG', `Pushed: spd=${S.speed}% dir=${S.dir===1?'fwd':'rev'} pause=${S.pause[0]}s shake=${S.shake[0]}x total=${pad(S.mm)}:${pad(S.ss)}`);
+function updateProgress(msg) {
+  const p = parseProgress(msg);
+  if (!p) return;
+
+  const clock = document.getElementById('big-clock');
+  clock.textContent = p.timeLeft;
+  clock.classList.remove('stopped','completed');
+
+  const seg  = document.getElementById('seg-lbl');
+  seg.innerHTML = `MODE <span class="seg-hi">${p.mode}</span> — RUNNING`;
+
+  // Progress bar (approximate based on remaining vs total)
+  const parts = p.timeLeft.split(':');
+  const remMs = (parseInt(parts[0])*60 + parseInt(parts[1])) * 1000;
+  const elapsed = totalMs - remMs;
+  const pct = Math.max(0, Math.min(100, (elapsed / totalMs) * 100));
+  document.getElementById('prog-fill').style.width = pct + '%';
 }
 
-// ── Start / Stop ───────────────────────────────────────────────────────────
-function doStart() {
-  if (!S.mqttConnected) { addLog('ERR', 'Not connected to MQTT'); return; }
-  if (S.running) return;
-  if (S.totalMs < 1000) { addLog('ERR', 'Set total time >= 1 second'); return; }
-  pushAllConfig();
-  setTimeout(() => {
-    mqPub(TOPICS.MODE, 'F' + (S.mode + 1));
-    addLog('START', `F${S.mode+1} spd=${S.speed}% dir=${S.dir===1?'FWD':'REV'} total=${pad(S.mm)}:${pad(S.ss)}`);
-    startCountdown();
-  }, 300);
-}
-function doStop() {
-  if (!S.mqttConnected) { addLog('ERR', 'Not connected to MQTT'); return; }
-  mqPub(TOPICS.CTRL, 'stop');
-  addLog('STOP', 'Stop command sent');
-  if (cdTimer) clearInterval(cdTimer);
-  setRunning(false);
+function startProgressTimer() {
+  stopProgressTimer();
+  // Tick the clock locally while running (progress topic updates every 500ms)
 }
 
-// ── MQTT publish ──────────────────────────────────────────────────────────
-function mqPub(topic, payload) {
-  if (!mqttClient || !S.mqttConnected) return;
-  mqttClient.publish(topic, payload, { qos: 1 }, (err) => {
-    if (err) addLog('ERR', 'Publish failed: ' + topic);
-  });
-}
-
-// ── MQTT connect / disconnect ──────────────────────────────────────────────
-function toggleConnect() {
-  if (S.mqttConnected) {
-    mqttClient.end(true);
-    setMqttStatus(false);
-    addLog('MQTT', 'Disconnected');
-    return;
-  }
-  const url  = document.getElementById('in-url').value.trim();
-  const user = document.getElementById('in-user').value.trim();
-  const pass = document.getElementById('in-pass').value.trim();
-  const cid  = document.getElementById('in-cid').value.trim() || ('dash_' + Date.now());
-
-  addLog('MQTT', 'Connecting to ' + url);
-  document.getElementById('btn-conn').textContent = 'Connecting...';
-  document.getElementById('btn-conn').disabled = true;
-
-  mqttClient = mqtt.connect(url, {
-    username:    user,
-    password:    pass,
-    clientId:    cid,
-    keepalive:   30,
-    reconnectPeriod: 0,
-    connectTimeout: 10000,
-  });
-
-  mqttClient.on('connect', () => {
-    setMqttStatus(true);
-    addLog('MQTT', 'Connected — subscribing to topics');
-    document.getElementById('sb-broker').textContent = url.replace('wss://','').split(':')[0];
-    mqttClient.subscribe([TOPICS.STATUS, TOPICS.PROGRESS, TOPICS.DEVST], { qos: 1 });
-  });
-
-  mqttClient.on('message', (topic, message) => {
-    const payload = message.toString();
-    addRxLog(topic, payload);
-    handleIncoming(topic, payload);
-  });
-
-  mqttClient.on('error', (err) => {
-    addLog('ERR', 'MQTT error: ' + err.message);
-    setMqttStatus(false);
-  });
-
-  mqttClient.on('close', () => {
-    setMqttStatus(false);
-    addLog('WARN', 'Connection closed');
-  });
-
-  mqttClient.on('offline', () => {
-    setMqttStatus(false);
-    addLog('WARN', 'Client offline');
-  });
+function stopProgressTimer() {
+  if (progressTimer) { clearInterval(progressTimer); progressTimer = null; }
 }
 
 function setMqttStatus(connected) {
-  S.mqttConnected = connected;
-  document.getElementById('lamp-mqtt').className = 'lamp ' + (connected ? 'g' : '');
-  document.getElementById('st-mqtt').textContent  = connected ? 'Online' : 'Offline';
-  document.getElementById('chip-mqtt').className  = 'chip ' + (connected ? 'chip-g' : 'chip-off');
-  document.getElementById('chip-mqtt').textContent = connected ? 'MQTT Online' : 'MQTT Offline';
-  document.getElementById('btn-conn').textContent = connected ? 'Disconnect' : 'Connect';
-  document.getElementById('btn-conn').className   = 'btn-conn' + (connected ? ' btn-disconn' : '');
-  document.getElementById('btn-conn').disabled    = false;
-  document.getElementById('btn-start').disabled   = !connected || S.running;
-  document.getElementById('btn-stop').disabled    = !connected || !S.running;
+  mqttConn = connected;
+  const dot = document.getElementById('dot-mqtt');
+  const lbl = document.getElementById('lbl-mqtt');
+  dot.className = 'dot ' + (connected ? 'green' : 'red');
+  lbl.textContent = connected ? 'MQTT' : 'OFFLINE';
+
+  const overlay = document.getElementById('conn-overlay');
+  overlay.classList.toggle('show', !connected);
 }
 
-// ── Handle incoming messages ───────────────────────────────────────────────
-function handleIncoming(topic, payload) {
-  if (topic === TOPICS.STATUS) {
-    const running = payload === 'running';
-    const stopped = payload === 'stopped' || payload === 'completed';
-    document.getElementById('mon-status').textContent = payload;
-    document.getElementById('lmp-status').className = 'lamp ' + (running ? 'g' : stopped ? 'r' : 'a');
-    if (running && !S.running) setRunning(true);
-    if ((stopped) && S.running) {
-      setRunning(false);
-      if (cdTimer) clearInterval(cdTimer);
-      addLog(payload === 'completed' ? 'DONE' : 'STOP', 'Motor ' + payload);
-    }
-  }
-  if (topic === TOPICS.PROGRESS) {
-    document.getElementById('mon-prog').textContent = payload;
-    document.getElementById('lmp-prog').className = 'lamp a';
-    // Parse MM:SS from progress message like "F1 01:23 left"
-    const m = payload.match(/(\d{2}):(\d{2})/);
-    if (m) {
-      const remMs = (parseInt(m[1]) * 60 + parseInt(m[2])) * 1000;
-      S.remaining = remMs;
-      document.getElementById('countdown').textContent = m[1] + ':' + m[2];
-      if (S.totalMs > 0) {
-        const pct = Math.round((1 - remMs / S.totalMs) * 100);
-        document.getElementById('prog').style.width = Math.min(100, pct) + '%';
-      }
-      const seg = payload.split(' ')[1] || '';
-      document.getElementById('cd-seg').textContent = payload.split(' ')[0] || '';
-    }
-  }
-  if (topic === TOPICS.DEVST) {
-    document.getElementById('mon-devst').textContent = payload;
-    document.getElementById('lmp-devst').className = 'lamp ' + (payload === 'online' ? 'g' : 'r');
-    document.getElementById('lamp-dev').className  = 'lamp ' + (payload === 'online' ? 'g' : 'r');
-    document.getElementById('st-dev').textContent  = payload === 'online' ? 'Online' : 'Offline';
-  }
+function setDeviceStatus(online) {
+  deviceOnline = online;
+  const dot = document.getElementById('dot-device');
+  const lbl = document.getElementById('lbl-device');
+  dot.className = 'dot ' + (online ? 'green' : 'red');
+  lbl.textContent = online ? 'ONLINE' : 'OFFLINE';
 }
 
-// Boot log
-addLog('BOOT', 'Dashboard ready — configure broker and connect');
+function lockUI(locked) {
+  const els = ['btn-start','btn-send-cfg','btn-oled',
+                'sl-speed','sl-pause','sl-shake','inp-total',
+                'dir-fwd','dir-rev'];
+  els.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = locked;
+  });
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('locked', locked));
+  document.getElementById('btn-stop').disabled = !locked;
+  document.getElementById('lock-lbl').textContent = locked ? '🔒 LOCKED — MOTOR RUNNING' : '';
+}
+
+// ═══════════════════════════════════════════════════════
+// ACTIVITY LOG
+// ═══════════════════════════════════════════════════════
+
+function addLog(msg, cls='') {
+  const body = document.getElementById('log-body');
+  const row  = document.createElement('div');
+  row.className = 'log-entry ' + cls;
+  row.innerHTML = `<span class="log-time">${now()}</span><span class="log-msg">${msg}</span>`;
+  body.appendChild(row);
+  body.scrollTop = body.scrollHeight;
+
+  // Cap log at 200 entries
+  while (body.children.length > 200) body.removeChild(body.firstChild);
+}
+
+function clearLog() { document.getElementById('log-body').innerHTML = ''; }
+
+function toggleRaw() {
+  showRaw = !showRaw;
+  document.getElementById('raw-toggle').textContent = 'RAW: ' + (showRaw ? 'ON' : 'OFF');
+}
+
+// ═══════════════════════════════════════════════════════
+// MQTT
+// ═══════════════════════════════════════════════════════
+
+function publish(topic, payload) {
+  if (!client || !mqttConn) return;
+  client.publish(topic, payload, { qos: 1 });
+  if (showRaw) addLog(`↑ [${topic}] ${payload}`, 'ev-config');
+}
+
+function initMqtt() {
+  addLog('Connecting to HiveMQ broker...', 'ev-conn');
+
+  client = mqtt.connect(BROKER, {
+    username:        MQTT_USER,
+    password:        MQTT_PASS,
+    clientId:        CLIENT_ID,
+    keepalive:       30,
+    reconnectPeriod: 5000,
+    connectTimeout:  15000,
+  });
+
+  client.on('connect', () => {
+    setMqttStatus(true);
+    addLog('Connected to MQTT broker', 'ev-conn');
+
+    const subs = [TOPICS.STATUS, TOPICS.PROGRESS, TOPICS.DEV];
+    client.subscribe(subs, { qos: 1 }, (err) => {
+      if (err) addLog('Subscribe error: ' + err.message, 'ev-error');
+      else addLog('Subscribed to motor/status, motor/progress, device/status', 'ev-conn');
+    });
+  });
+
+  client.on('reconnect', () => {
+    addLog('Reconnecting...', 'ev-warn');
+    setMqttStatus(false);
+  });
+
+  client.on('offline',    () => { setMqttStatus(false); addLog('MQTT client offline', 'ev-error'); });
+  client.on('error', (e) => { addLog('MQTT error: ' + e.message, 'ev-error'); });
+  client.on('close',      () => { setMqttStatus(false); });
+
+  client.on('message', (topic, message) => {
+    const msg = message.toString();
+    if (showRaw) addLog(`↓ [${topic}] ${msg}`, '');
+
+    switch(topic) {
+      case TOPICS.STATUS:
+        if (msg === 'running') {
+          setMotorStatus('running', null);
+          addLog('▶ Motor running', 'ev-status');
+        } else if (msg === 'stopped') {
+          setMotorStatus('stopped', null);
+          addLog('■ Motor stopped', 'ev-stop');
+        } else if (msg === 'completed') {
+          setMotorStatus('completed', null);
+          addLog('✓ Pattern completed', 'ev-status');
+        }
+        break;
+
+      case TOPICS.PROGRESS:
+        updateProgress(msg);
+        break;
+
+      case TOPICS.DEV:
+        if (msg === 'online') {
+          setDeviceStatus(true);
+          addLog('Device came online', 'ev-conn');
+        } else if (msg === 'offline') {
+          setDeviceStatus(false);
+          addLog('Device went offline (LWT)', 'ev-warn');
+        }
+        break;
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════
+
+document.addEventListener('DOMContentLoaded', () => {
+  buildModeGrid();
+  loadLocal();
+  selectMode(selectedMode);
+  updateOledPreview();
+  lockUI(false);
+  initMqtt();
+});
 </script>
 </body>
 </html>
