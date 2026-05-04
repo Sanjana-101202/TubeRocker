@@ -1,338 +1,751 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>ESP32 Control</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/5.3.4/mqtt.min.js"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet"/>
-  <style>
-    :root {
-      --bg:        #0a0e17;
-      --panel:     #0f1623;
-      --border:    #1e2d45;
-      --on:        #00f5a0;
-      --off:       #ff3c5f;
-      --idle:      #1e3a5f;
-      --text:      #c8dff5;
-      --dim:       #4a6a8a;
-      --glow-on:   0 0 24px #00f5a080, 0 0 60px #00f5a030;
-      --glow-off:  0 0 24px #ff3c5f80, 0 0 60px #ff3c5f30;
-    }
- 
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
- 
-    body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: 'Share Tech Mono', monospace;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      overflow: hidden;
-    }
- 
-    /* grid background */
-    body::before {
-      content: '';
-      position: fixed;
-      inset: 0;
-      background-image:
-        linear-gradient(rgba(0,245,160,0.03) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(0,245,160,0.03) 1px, transparent 1px);
-      background-size: 40px 40px;
-      pointer-events: none;
-    }
- 
-    .card {
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      padding: 48px 56px;
-      width: 380px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 36px;
-      position: relative;
-    }
- 
-    /* corner accents */
-    .card::before, .card::after {
-      content: '';
-      position: absolute;
-      width: 16px; height: 16px;
-      border-color: var(--on);
-      border-style: solid;
-    }
-    .card::before { top: -1px; left: -1px; border-width: 2px 0 0 2px; }
-    .card::after  { bottom: -1px; right: -1px; border-width: 0 2px 2px 0; }
- 
-    .header { text-align: center; }
- 
-    .title {
-      font-family: 'Orbitron', monospace;
-      font-size: 22px;
-      font-weight: 900;
-      letter-spacing: 4px;
-      color: var(--on);
-      text-shadow: 0 0 20px #00f5a060;
-    }
- 
-    .subtitle {
-      font-size: 11px;
-      color: var(--dim);
-      letter-spacing: 3px;
-      margin-top: 6px;
-    }
- 
-    /* connection status */
-    .status-bar {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      font-size: 11px;
-      letter-spacing: 2px;
-      color: var(--dim);
-      width: 100%;
-    }
- 
-    .dot {
-      width: 8px; height: 8px;
-      border-radius: 50%;
-      background: var(--off);
-      transition: background 0.3s, box-shadow 0.3s;
-      flex-shrink: 0;
-    }
-    .dot.connected {
-      background: var(--on);
-      box-shadow: 0 0 10px var(--on);
-      animation: pulse 2s infinite;
-    }
- 
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50%       { opacity: 0.5; }
-    }
- 
-    /* GPIO info */
-    .gpio-label {
-      font-size: 11px;
-      letter-spacing: 3px;
-      color: var(--dim);
-      text-align: center;
-    }
- 
-    /* toggle button */
-    .toggle-btn {
-      width: 160px; height: 160px;
-      border-radius: 50%;
-      border: 2px solid var(--idle);
-      background: transparent;
-      cursor: pointer;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      transition: border-color 0.3s, box-shadow 0.3s, transform 0.1s;
-      position: relative;
-      outline: none;
-    }
- 
-    .toggle-btn::before {
-      content: '';
-      position: absolute;
-      inset: 8px;
-      border-radius: 50%;
-      border: 1px solid var(--idle);
-      transition: border-color 0.3s;
-    }
- 
-    .toggle-btn:disabled {
-      opacity: 0.4;
-      cursor: not-allowed;
-    }
- 
-    .toggle-btn:not(:disabled):hover {
-      transform: scale(1.04);
-    }
- 
-    .toggle-btn:not(:disabled):active {
-      transform: scale(0.97);
-    }
- 
-    .toggle-btn.on {
-      border-color: var(--on);
-      box-shadow: var(--glow-on);
-    }
-    .toggle-btn.on::before { border-color: var(--on); }
- 
-    .toggle-btn.off {
-      border-color: var(--off);
-      box-shadow: var(--glow-off);
-    }
-    .toggle-btn.off::before { border-color: var(--off); }
- 
-    .btn-icon {
-      font-size: 40px;
-      line-height: 1;
-      transition: color 0.3s;
-      color: var(--dim);
-    }
-    .toggle-btn.on  .btn-icon { color: var(--on); text-shadow: 0 0 16px var(--on); }
-    .toggle-btn.off .btn-icon { color: var(--off); text-shadow: 0 0 16px var(--off); }
- 
-    .btn-state {
-      font-family: 'Orbitron', monospace;
-      font-size: 13px;
-      font-weight: 700;
-      letter-spacing: 4px;
-      color: var(--dim);
-      transition: color 0.3s;
-    }
-    .toggle-btn.on  .btn-state { color: var(--on); }
-    .toggle-btn.off .btn-state { color: var(--off); }
- 
-    /* log */
-    .log {
-      width: 100%;
-      background: #060a10;
-      border: 1px solid var(--border);
-      border-radius: 2px;
-      padding: 12px;
-      font-size: 10px;
-      color: var(--dim);
-      height: 72px;
-      overflow-y: auto;
-      letter-spacing: 1px;
-      line-height: 1.7;
-    }
- 
-    .log-entry { color: var(--dim); }
-    .log-entry.send { color: var(--on); }
-    .log-entry.recv { color: #5bc8ff; }
-    .log-entry.err  { color: var(--off); }
- 
-    /* scrollbar */
-    .log::-webkit-scrollbar { width: 3px; }
-    .log::-webkit-scrollbar-track { background: transparent; }
-    .log::-webkit-scrollbar-thumb { background: var(--border); }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tube Rocker — Motor Control System</title>
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&display=swap');
+:root {
+  --bg:       #0f140f;
+  --bg2:      #141a14;
+  --bg3:      #0a0e0a;
+  --border:   #1e2e1e;
+  --border2:  #2a422a;
+  --green:    #4caf50;
+  --gdim:     #2a5c2a;
+  --ghi:      #76ff7a;
+  --gmid:     #a5d6a7;
+  --amber:    #ffc107;
+  --red:      #f44336;
+  --rdim:     #4a1010;
+  --text:     #a8c0a8;
+  --tdim:     #4a604a;
+  --thi:      #dceadc;
+  --mono:     'Share Tech Mono', monospace;
+  --sans:     'Rajdhani', sans-serif;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html,body{background:var(--bg);color:var(--text);font-family:var(--mono);font-size:12px;min-height:100vh;overflow-x:hidden;}
+body::before{content:'';position:fixed;inset:0;z-index:999;background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,0.025) 3px,rgba(0,0,0,0.025) 4px);pointer-events:none;}
+
+/* HEADER */
+.hdr{background:#090d09;border-bottom:1px solid var(--border2);padding:0 18px;height:46px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200;}
+.hdr-l{display:flex;align-items:center;gap:12px;}
+.logo{width:26px;height:26px;border:1px solid var(--gdim);display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--green);}
+.hdr-title{font-family:var(--sans);font-size:14px;font-weight:700;color:var(--ghi);letter-spacing:4px;text-transform:uppercase;}
+.hdr-sub{font-size:9px;color:var(--tdim);letter-spacing:2px;}
+.hdr-r{display:flex;align-items:center;gap:14px;}
+.chip{font-size:9px;padding:3px 8px;border-radius:1px;letter-spacing:1px;text-transform:uppercase;border:1px solid;}
+.chip-g{background:#0a200a;color:var(--ghi);border-color:var(--gdim);}
+.chip-a{background:#201400;color:var(--amber);border-color:#604000;}
+.chip-r{background:var(--rdim);color:#ff9090;border-color:#7a1a1a;}
+.chip-off{background:#1a1a1a;color:#555;border-color:#333;}
+#clock{font-size:13px;color:var(--gmid);letter-spacing:2px;}
+
+/* LAYOUT */
+.body{display:grid;grid-template-columns:210px 1fr 210px;height:calc(100vh - 46px);}
+.col{display:flex;flex-direction:column;border-right:1px solid var(--border);overflow-y:auto;}
+.col:last-child{border-right:none;border-left:1px solid var(--border);}
+.main{overflow-y:auto;}
+
+/* PANELS */
+.panel{border-bottom:1px solid var(--border);padding:11px 13px;}
+.pt{font-size:8px;letter-spacing:3px;text-transform:uppercase;color:var(--tdim);margin-bottom:9px;display:flex;align-items:center;gap:5px;}
+.pt::before{content:'';width:3px;height:3px;background:var(--gdim);flex-shrink:0;}
+.pt::after{content:'';flex:1;height:1px;background:var(--border);margin-left:4px;}
+
+/* LAMPS */
+.lamp-row{display:flex;align-items:center;gap:7px;margin-bottom:7px;}
+.lamp{width:9px;height:9px;border-radius:50%;flex-shrink:0;background:#1a1a1a;border:1px solid #2a2a2a;transition:background .3s,box-shadow .3s;}
+.lamp.g{background:var(--green);box-shadow:0 0 5px var(--green);border-color:var(--green);}
+.lamp.a{background:var(--amber);box-shadow:0 0 5px var(--amber);border-color:var(--amber);}
+.lamp.r{background:var(--red);box-shadow:0 0 5px var(--red);border-color:var(--red);}
+.lamp-lbl{font-size:9px;color:var(--tdim);flex:1;letter-spacing:1px;}
+.lamp-val{font-size:9px;color:var(--thi);}
+
+/* COUNTDOWN */
+.countdown{font-size:34px;font-weight:400;color:var(--ghi);letter-spacing:5px;text-align:center;padding:6px 0;font-family:var(--mono);}
+.cd-lbl{font-size:8px;text-align:center;color:var(--tdim);letter-spacing:3px;text-transform:uppercase;}
+.prog-bg{background:var(--bg3);border:1px solid var(--border);border-radius:1px;height:12px;margin:8px 0;overflow:hidden;}
+.prog-fill{height:100%;width:0%;background:var(--gdim);transition:width 1s linear;border-radius:1px;}
+.prog-fill.run{background:var(--green);}
+
+/* BUTTONS */
+.btn{width:100%;padding:8px;font-family:var(--mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;cursor:pointer;border-radius:1px;border:1px solid;margin-bottom:5px;transition:background .15s,opacity .15s;}
+.btn-start{background:#0a220a;border-color:var(--green);color:var(--ghi);}
+.btn-start:hover:not(:disabled){background:#143214;}
+.btn-stop{background:#220a0a;border-color:var(--red);color:#ff9090;}
+.btn-stop:hover:not(:disabled){background:#3a1010;}
+.btn:disabled{opacity:.3;cursor:not-allowed;}
+
+/* DIRECTION */
+.dir-wrap{display:flex;gap:4px;margin-top:2px;}
+.dir-btn{flex:1;padding:6px;font-family:var(--mono);font-size:9px;letter-spacing:1px;cursor:pointer;border-radius:1px;border:1px solid var(--border);background:#111;color:var(--tdim);text-align:center;transition:all .15s;}
+.dir-btn.active{background:#0a2e20;border-color:#3a8a60;color:#76ffcc;}
+
+/* MODE GRID */
+.mode-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-bottom:8px;}
+.mode-btn{background:#0a0e0a;border:1px solid var(--border);color:var(--tdim);font-family:var(--mono);font-size:11px;padding:7px 0;cursor:pointer;border-radius:1px;text-align:center;transition:all .15s;}
+.mode-btn:hover{border-color:var(--gdim);color:var(--text);}
+.mode-btn.active{background:var(--gdim);border-color:var(--green);color:var(--ghi);}
+.mode-desc{font-size:9px;color:var(--tdim);padding:5px 7px;background:var(--bg3);border-radius:1px;min-height:30px;line-height:1.5;border:1px solid var(--border);}
+
+/* SLIDERS */
+.sl-row{margin-bottom:9px;}
+.sl-top{display:flex;justify-content:space-between;font-size:9px;color:var(--tdim);margin-bottom:3px;}
+.sl-val{color:var(--green);font-size:10px;}
+input[type=range]{width:100%;height:3px;accent-color:var(--green);background:#1a2a1a;border-radius:1px;cursor:pointer;outline:none;}
+
+/* PARAM CELLS */
+.param-cell{background:var(--bg3);border:1px solid var(--border);border-radius:1px;padding:7px 8px;transition:border-color .2s;}
+.param-cell:focus-within{border-color:var(--gdim);}
+.param-name{font-size:8px;color:var(--tdim);letter-spacing:2px;text-transform:uppercase;margin-bottom:5px;}
+.param-row{display:flex;align-items:center;gap:4px;}
+.param-val{font-size:14px;color:var(--ghi);flex:1;text-align:center;font-family:var(--mono);}
+.param-unit{font-size:9px;color:var(--tdim);}
+.incdec{background:#111;border:1px solid var(--border);color:var(--text);font-size:11px;padding:2px 7px;cursor:pointer;border-radius:1px;font-family:var(--mono);transition:border-color .15s;}
+.incdec:hover{border-color:var(--green);color:var(--ghi);}
+
+/* NUM INPUT */
+.num-in{background:var(--bg3);border:1px solid var(--border);color:var(--ghi);font-family:var(--mono);font-size:12px;padding:4px 6px;border-radius:1px;width:100%;text-align:right;outline:none;}
+.num-in:focus{border-color:var(--green);}
+
+/* LOG */
+.log-box{background:var(--bg3);border:1px solid var(--border);border-radius:1px;padding:6px 8px;height:130px;overflow-y:auto;font-size:9px;color:var(--tdim);}
+.log-line{margin-bottom:3px;line-height:1.4;}
+.log-line .lt{color:var(--gdim);}
+.log-line .lv{color:var(--thi);}
+.log-line .le{color:var(--red);}
+.log-line .lw{color:var(--amber);}
+
+/* BROKER FORM */
+.broker-form{display:flex;flex-direction:column;gap:5px;}
+.field-lbl{font-size:8px;color:var(--tdim);letter-spacing:2px;text-transform:uppercase;margin-bottom:2px;}
+.field-in{background:var(--bg3);border:1px solid var(--border);color:var(--thi);font-family:var(--mono);font-size:10px;padding:5px 7px;border-radius:1px;width:100%;outline:none;}
+.field-in:focus{border-color:var(--gdim);}
+.btn-conn{width:100%;margin-top:4px;padding:7px;font-family:var(--mono);font-size:9px;letter-spacing:2px;text-transform:uppercase;cursor:pointer;border-radius:1px;border:1px solid var(--gdim);background:#0a200a;color:var(--ghi);transition:background .15s;}
+.btn-conn:hover{background:#143214;}
+.btn-disconn{border-color:#7a1a1a;background:var(--rdim);color:#ff9090;}
+.btn-disconn:hover{background:#5a1010;}
+
+/* MAIN GRID */
+.main-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px;}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:2px;padding:12px;}
+.card-full{grid-column:1/-1;}
+.card-title{font-size:8px;letter-spacing:3px;text-transform:uppercase;color:var(--tdim);margin-bottom:10px;display:flex;align-items:center;gap:5px;}
+.card-title::before{content:'';width:3px;height:3px;background:var(--gdim);}
+
+/* PARAM GRIDS */
+.pg3{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
+.pg2{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;}
+
+/* SEPARATOR */
+hr.sep{border:none;border-top:1px solid var(--border);margin:8px 0;}
+
+/* TOTAL MMSS */
+.mmss-row{display:flex;gap:6px;align-items:flex-end;}
+.mmss-field{flex:1;}
+
+/* STATUS BAR */
+.statbar{background:#090d09;border-top:1px solid var(--border);padding:4px 16px;display:flex;gap:20px;font-size:8px;color:var(--tdim);letter-spacing:1px;}
+.statbar span{color:var(--tdim);}
+.statbar .sv{color:var(--green);}
+
+/* SCROLLBAR */
+::-webkit-scrollbar{width:4px;}
+::-webkit-scrollbar-track{background:var(--bg3);}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
+</style>
 </head>
 <body>
- 
-<div class="card">
-  <div class="header">
-    <div class="title">ESP32</div>
-    <div class="subtitle">REMOTE CONTROL PANEL</div>
+
+<!-- HEADER -->
+<div class="hdr">
+  <div class="hdr-l">
+    <div class="logo">TR</div>
+    <div>
+      <div class="hdr-title">Tube Rocker</div>
+      <div class="hdr-sub">Motor Control System &mdash; v5</div>
+    </div>
   </div>
- 
-  <div class="status-bar">
-    <div class="dot" id="dot"></div>
-    <span id="status-text">CONNECTING...</span>
+  <div class="hdr-r">
+    <span class="chip chip-off" id="chip-mqtt">MQTT Offline</span>
+    <span class="chip chip-off" id="chip-motor">Motor Idle</span>
+    <span id="clock">--:--:--</span>
   </div>
- 
-  <div class="gpio-label">GPIO PIN 14</div>
- 
-  <button class="toggle-btn" id="toggleBtn" disabled onclick="toggle()">
-    <span class="btn-icon">⏻</span>
-    <span class="btn-state" id="btnLabel">---</span>
-  </button>
- 
-  <div class="log" id="log"></div>
 </div>
- 
+
+<!-- BODY -->
+<div class="body">
+
+  <!-- LEFT COL -->
+  <div class="col">
+
+    <!-- System Status -->
+    <div class="panel">
+      <div class="pt">System Status</div>
+      <div class="lamp-row"><div class="lamp" id="lamp-mqtt"></div><span class="lamp-lbl">MQTT Broker</span><span class="lamp-val" id="st-mqtt">Offline</span></div>
+      <div class="lamp-row"><div class="lamp" id="lamp-dev"></div><span class="lamp-lbl">Device</span><span class="lamp-val" id="st-dev">Offline</span></div>
+      <div class="lamp-row"><div class="lamp" id="lamp-motor"></div><span class="lamp-lbl">Motor</span><span class="lamp-val" id="st-motor">Idle</span></div>
+    </div>
+
+    <!-- Countdown -->
+    <div class="panel">
+      <div class="pt">Time Remaining</div>
+      <div class="countdown" id="countdown">--:--</div>
+      <div class="cd-lbl" id="cd-seg">Stopped</div>
+      <div class="prog-bg"><div class="prog-fill" id="prog"></div></div>
+    </div>
+
+    <!-- Controls -->
+    <div class="panel">
+      <div class="pt">Motor Controls</div>
+      <button class="btn btn-start" id="btn-start" onclick="doStart()" disabled>&#9654; Start</button>
+      <button class="btn btn-stop"  id="btn-stop"  onclick="doStop()"  disabled>&#9632; Stop</button>
+      <hr class="sep">
+      <div class="pt" style="margin-bottom:5px;">Direction</div>
+      <div class="dir-wrap">
+        <div class="dir-btn active" id="dir-fwd" onclick="setDir(1)">&#9658; FWD</div>
+        <div class="dir-btn"        id="dir-rev" onclick="setDir(0)">&#9668; REV</div>
+      </div>
+    </div>
+
+    <!-- Event Log -->
+    <div class="panel" style="flex:1;">
+      <div class="pt">Event Log</div>
+      <div class="log-box" id="log"></div>
+    </div>
+
+  </div><!-- /left -->
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="main-grid">
+
+      <!-- Mode Selection -->
+      <div class="card card-full">
+        <div class="card-title">Mode Selection</div>
+        <div class="mode-grid" id="mode-grid"></div>
+        <div class="mode-desc" id="mode-desc">F1 — Continuous spin, single direction. No events.</div>
+      </div>
+
+      <!-- Speed -->
+      <div class="card">
+        <div class="card-title">Speed</div>
+        <div class="sl-row">
+          <div class="sl-top"><span>Motor Speed</span><span class="sl-val" id="spd-val">50%</span></div>
+          <input type="range" id="spd-sl" min="0" max="100" step="1" value="50" oninput="setSpeed(this.value)">
+        </div>
+        <div class="param-cell" style="margin-top:6px;">
+          <div class="param-name">Speed %</div>
+          <div class="param-row">
+            <button class="incdec" onclick="adjSpeed(-5)">-</button>
+            <span class="param-val" id="spd-num">50</span>
+            <span class="param-unit">%</span>
+            <button class="incdec" onclick="adjSpeed(5)">+</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Total Duration -->
+      <div class="card">
+        <div class="card-title">Total Duration</div>
+        <div class="sl-row">
+          <div class="sl-top"><span>Minutes (0–99)</span><span class="sl-val" id="total-sl-val">01:00</span></div>
+          <input type="range" id="total-sl" min="0" max="99" step="1" value="1" oninput="syncTotalFromSlider(this.value)">
+        </div>
+        <div class="mmss-row" style="margin-top:8px;">
+          <div class="mmss-field">
+            <div class="field-lbl">Min (MM)</div>
+            <input class="num-in" type="number" id="in-mm" min="0" max="99" value="1" oninput="syncTotalFromInput()">
+          </div>
+          <div class="mmss-field">
+            <div class="field-lbl">Sec (SS)</div>
+            <input class="num-in" type="number" id="in-ss" min="0" max="59" value="0" oninput="syncTotalFromInput()">
+          </div>
+        </div>
+      </div>
+
+      <!-- Pause Config -->
+      <div class="card">
+        <div class="card-title">Pause Config</div>
+        <div class="pg3">
+          <div class="param-cell">
+            <div class="param-name">Pause 1</div>
+            <div class="param-row">
+              <button class="incdec" onclick="adjPause(0,-1)">-</button>
+              <span class="param-val" id="p0">2</span>
+              <span class="param-unit">s</span>
+              <button class="incdec" onclick="adjPause(0,1)">+</button>
+            </div>
+          </div>
+          <div class="param-cell">
+            <div class="param-name">Pause 2</div>
+            <div class="param-row">
+              <button class="incdec" onclick="adjPause(1,-1)">-</button>
+              <span class="param-val" id="p1">2</span>
+              <span class="param-unit">s</span>
+              <button class="incdec" onclick="adjPause(1,1)">+</button>
+            </div>
+          </div>
+          <div class="param-cell">
+            <div class="param-name">Pause 3</div>
+            <div class="param-row">
+              <button class="incdec" onclick="adjPause(2,-1)">-</button>
+              <span class="param-val" id="p2">2</span>
+              <span class="param-unit">s</span>
+              <button class="incdec" onclick="adjPause(2,1)">+</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Shake Config -->
+      <div class="card">
+        <div class="card-title">Shake Config</div>
+        <div class="pg3">
+          <div class="param-cell">
+            <div class="param-name">Shake 1</div>
+            <div class="param-row">
+              <button class="incdec" onclick="adjShake(0,-1)">-</button>
+              <span class="param-val" id="s0">3</span>
+              <span class="param-unit">x</span>
+              <button class="incdec" onclick="adjShake(0,1)">+</button>
+            </div>
+          </div>
+          <div class="param-cell">
+            <div class="param-name">Shake 2</div>
+            <div class="param-row">
+              <button class="incdec" onclick="adjShake(1,-1)">-</button>
+              <span class="param-val" id="s1">3</span>
+              <span class="param-unit">x</span>
+              <button class="incdec" onclick="adjShake(1,1)">+</button>
+            </div>
+          </div>
+          <div class="param-cell">
+            <div class="param-name">Shake 3</div>
+            <div class="param-row">
+              <button class="incdec" onclick="adjShake(2,-1)">-</button>
+              <span class="param-val" id="s2">3</span>
+              <span class="param-unit">x</span>
+              <button class="incdec" onclick="adjShake(2,1)">+</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /main-grid -->
+  </div><!-- /main -->
+
+  <!-- RIGHT COL -->
+  <div class="col">
+
+    <!-- Broker Config -->
+    <div class="panel">
+      <div class="pt">MQTT Broker</div>
+      <div class="broker-form">
+        <div>
+          <div class="field-lbl">WebSocket URL</div>
+          <input class="field-in" id="in-url" type="text" value="wss://29d1db5d807d40109f45b518b9d3017d.s1.eu.hivemq.cloud:8884/mqtt" placeholder="wss://host:port/mqtt">
+        </div>
+        <div>
+          <div class="field-lbl">Username</div>
+          <input class="field-in" id="in-user" type="text" value="sanjana_tuberocker">
+        </div>
+        <div>
+          <div class="field-lbl">Password</div>
+          <input class="field-in" id="in-pass" type="password" value="Sanjana_tuberocker01">
+        </div>
+        <div>
+          <div class="field-lbl">Client ID</div>
+          <input class="field-in" id="in-cid" type="text" value="dashboard_001">
+        </div>
+        <button class="btn-conn" id="btn-conn" onclick="toggleConnect()">Connect</button>
+      </div>
+    </div>
+
+    <!-- Topics Monitor -->
+    <div class="panel">
+      <div class="pt">Topic Monitor</div>
+      <div style="display:flex;flex-direction:column;gap:5px;">
+        <div class="lamp-row"><div class="lamp" id="lmp-status"></div><span class="lamp-lbl" style="font-size:8px;">motor/status</span><span class="lamp-val" id="mon-status">—</span></div>
+        <div class="lamp-row"><div class="lamp" id="lmp-prog"></div><span class="lamp-lbl" style="font-size:8px;">motor/progress</span><span class="lamp-val" id="mon-prog">—</span></div>
+        <div class="lamp-row"><div class="lamp" id="lmp-devst"></div><span class="lamp-lbl" style="font-size:8px;">device/status</span><span class="lamp-val" id="mon-devst">—</span></div>
+      </div>
+    </div>
+
+    <!-- Push Config -->
+    <div class="panel">
+      <div class="pt">Push Config to Device</div>
+      <button class="btn btn-start" style="margin-bottom:5px;font-size:9px;" onclick="pushAllConfig()">&#8593; Push All Config</button>
+      <div style="font-size:8px;color:var(--tdim);line-height:1.6;margin-top:4px;">
+        Sends speed, direction, pause, shake, and total time to device over MQTT. Motor must be idle.
+      </div>
+    </div>
+
+    <!-- Received Messages -->
+    <div class="panel" style="flex:1;">
+      <div class="pt">Received Messages</div>
+      <div class="log-box" id="rx-log" style="height:160px;"></div>
+    </div>
+
+  </div><!-- /right -->
+
+</div><!-- /body -->
+
+<!-- STATUS BAR -->
+<div class="statbar">
+  <span>BROKER <span class="sv" id="sb-broker">—</span></span>
+  <span>MODE <span class="sv" id="sb-mode">F1</span></span>
+  <span>SPEED <span class="sv" id="sb-spd">50%</span></span>
+  <span>TOTAL <span class="sv" id="sb-total">01:00</span></span>
+  <span>DIR <span class="sv" id="sb-dir">FWD</span></span>
+  <span>PAUSE <span class="sv" id="sb-pause">2/2/2 s</span></span>
+  <span>SHAKE <span class="sv" id="sb-shake">3/3/3 x</span></span>
+</div>
+
 <script>
-  const BROKER   = 'wss://broker.hivemq.com:8884/mqtt';
-  const PUB      = 'tuberocker_esp/gpio14';
-  const SUB      = 'tuberocker_esp';
-  const CLIENT_ID = 'web_ctrl_' + Math.random().toString(16).slice(2, 8);
- 
-  let pinState = false;
-  let client;
- 
-  const dot       = document.getElementById('dot');
-  const statusTxt = document.getElementById('status-text');
-  const btn       = document.getElementById('toggleBtn');
-  const btnLabel  = document.getElementById('btnLabel');
-  const logEl     = document.getElementById('log');
- 
-  function log(msg, type = '') {
-    const now = new Date().toLocaleTimeString();
-    const el = document.createElement('div');
-    el.className = 'log-entry ' + type;
-    el.textContent = `[${now}] ${msg}`;
-    logEl.appendChild(el);
-    logEl.scrollTop = logEl.scrollHeight;
+// ── State ────────────────────────────────────────────────────────────────
+const S = {
+  mode: 0,
+  speed: 50,
+  dir: 1,
+  pause: [2, 2, 2],
+  shake: [3, 3, 3],
+  mm: 1, ss: 0,
+  running: false,
+  totalMs: 60000,
+  remaining: 0,
+  mqttConnected: false,
+};
+
+const TOPICS = {
+  CTRL:     'motor/control',
+  MODE:     'motor/mode',
+  STATUS:   'motor/status',
+  PROGRESS: 'motor/progress',
+  DISPLAY:  'display/text',
+  DEVST:    'device/status',
+  CFG_SPD:  'motor/config/speed',
+  CFG_DIR:  'motor/config/direction',
+  CFG_PAUSE:'motor/config/pause_sec',
+  CFG_SHAKE:'motor/config/shake_cnt',
+  CFG_TOTAL:'motor/config/total_ms',
+};
+
+const MODE_DESCS = [
+  'F1 — Continuous spin, single direction. No events.',
+  'F2 — Spin → Pause1 at midpoint → Spin.',
+  'F3 — Spin → Pause1 → Spin → Pause2 → Spin.',
+  'F4 — Spin → Shake1 → Spin → Pause1 → Spin.',
+  'F5 — Spin → Shake1 → Spin → Pause1 → Spin → Shake2 → Spin.',
+  'F6 — Spin → Shake1 → Shake2 → Shake3 → Spin.',
+  'F7 — Repeating half-cycles with 3 pauses each direction.',
+  'F8 — Repeating half-cycles: Shake1 + Shake2 + Pause1 each direction.',
+  'F9 — Repeating half-cycles with 3 shakes each direction.',
+];
+
+let mqttClient = null;
+let cdTimer = null;
+
+// ── Helpers ──────────────────────────────────────────────────────────────
+function pad(n) { return String(Math.floor(n)).padStart(2, '0'); }
+function fmtMMSS(ms) {
+  let s = Math.max(0, Math.floor(ms / 1000));
+  return pad(Math.floor(s / 60)) + ':' + pad(s % 60);
+}
+function addLog(type, msg) {
+  const box = document.getElementById('log');
+  const d = document.createElement('div');
+  d.className = 'log-line';
+  const now = new Date();
+  const ts = pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
+  const cls = type === 'ERR' ? 'le' : type === 'WARN' ? 'lw' : 'lt';
+  d.innerHTML = `<span class="${cls}">[${type} ${ts}]</span> <span class="lv">${msg}</span>`;
+  box.appendChild(d);
+  box.scrollTop = box.scrollHeight;
+}
+function addRxLog(topic, payload) {
+  const box = document.getElementById('rx-log');
+  const d = document.createElement('div');
+  d.className = 'log-line';
+  const now = new Date();
+  const ts = pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
+  d.innerHTML = `<span class="lt">[${ts}]</span> <span style="color:var(--gdim)">${topic}</span> <span class="lv">${payload}</span>`;
+  box.appendChild(d);
+  box.scrollTop = box.scrollHeight;
+}
+
+// ── Clock ─────────────────────────────────────────────────────────────────
+setInterval(() => {
+  const n = new Date();
+  document.getElementById('clock').textContent =
+    pad(n.getHours()) + ':' + pad(n.getMinutes()) + ':' + pad(n.getSeconds());
+}, 1000);
+
+// ── Mode grid ─────────────────────────────────────────────────────────────
+function buildModes() {
+  const g = document.getElementById('mode-grid');
+  g.innerHTML = '';
+  for (let i = 0; i < 9; i++) {
+    const b = document.createElement('button');
+    b.className = 'mode-btn' + (S.mode === i ? ' active' : '');
+    b.textContent = 'F' + (i + 1);
+    b.onclick = () => selectMode(i);
+    g.appendChild(b);
   }
- 
-  function setConnected(connected) {
-    dot.className = 'dot' + (connected ? ' connected' : '');
-    statusTxt.textContent = connected ? 'BROKER CONNECTED' : 'DISCONNECTED';
-    btn.disabled = !connected;
-    if (!connected) {
-      btn.className = 'toggle-btn';
-      btnLabel.textContent = '---';
+}
+function selectMode(i) {
+  S.mode = i;
+  buildModes();
+  document.getElementById('mode-desc').textContent = MODE_DESCS[i];
+  updateStatusBar();
+}
+buildModes();
+
+// ── Speed ─────────────────────────────────────────────────────────────────
+function setSpeed(v) {
+  S.speed = parseInt(v);
+  document.getElementById('spd-val').textContent = v + '%';
+  document.getElementById('spd-num').textContent = v;
+  document.getElementById('spd-sl').value = v;
+  updateStatusBar();
+}
+function adjSpeed(d) {
+  setSpeed(Math.min(100, Math.max(0, S.speed + d)));
+}
+
+// ── Direction ─────────────────────────────────────────────────────────────
+function setDir(v) {
+  S.dir = v;
+  document.getElementById('dir-fwd').className = 'dir-btn' + (v === 1 ? ' active' : '');
+  document.getElementById('dir-rev').className = 'dir-btn' + (v === 0 ? ' active' : '');
+  document.getElementById('sb-dir').textContent = v === 1 ? 'FWD' : 'REV';
+}
+
+// ── Total time ─────────────────────────────────────────────────────────────
+function syncTotalFromSlider(v) {
+  S.mm = parseInt(v); S.ss = 0;
+  document.getElementById('in-mm').value = S.mm;
+  document.getElementById('in-ss').value = 0;
+  document.getElementById('total-sl-val').textContent = pad(S.mm) + ':' + pad(S.ss);
+  S.totalMs = (S.mm * 60 + S.ss) * 1000;
+  updateStatusBar();
+}
+function syncTotalFromInput() {
+  S.mm = Math.min(99, Math.max(0, parseInt(document.getElementById('in-mm').value) || 0));
+  S.ss = Math.min(59, Math.max(0, parseInt(document.getElementById('in-ss').value) || 0));
+  document.getElementById('total-sl').value = S.mm;
+  document.getElementById('total-sl-val').textContent = pad(S.mm) + ':' + pad(S.ss);
+  S.totalMs = (S.mm * 60 + S.ss) * 1000;
+  updateStatusBar();
+}
+
+// ── Pause / Shake ──────────────────────────────────────────────────────────
+function adjPause(i, d) {
+  S.pause[i] = Math.max(1, S.pause[i] + d);
+  document.getElementById('p' + i).textContent = S.pause[i];
+  updateStatusBar();
+}
+function adjShake(i, d) {
+  S.shake[i] = Math.max(1, S.shake[i] + d);
+  document.getElementById('s' + i).textContent = S.shake[i];
+  updateStatusBar();
+}
+
+// ── Status bar ─────────────────────────────────────────────────────────────
+function updateStatusBar() {
+  document.getElementById('sb-mode').textContent = 'F' + (S.mode + 1);
+  document.getElementById('sb-spd').textContent  = S.speed + '%';
+  document.getElementById('sb-total').textContent = pad(S.mm) + ':' + pad(S.ss);
+  document.getElementById('sb-dir').textContent   = S.dir === 1 ? 'FWD' : 'REV';
+  document.getElementById('sb-pause').textContent = S.pause.join('/') + ' s';
+  document.getElementById('sb-shake').textContent = S.shake.join('/') + ' x';
+}
+updateStatusBar();
+
+// ── Motor running state ────────────────────────────────────────────────────
+function setRunning(r) {
+  S.running = r;
+  document.getElementById('btn-start').disabled = r || !S.mqttConnected;
+  document.getElementById('btn-stop').disabled  = !r || !S.mqttConnected;
+  document.getElementById('lamp-motor').className = 'lamp ' + (r ? 'g' : '');
+  document.getElementById('st-motor').textContent  = r ? 'Running' : 'Idle';
+  document.getElementById('chip-motor').className  = 'chip ' + (r ? 'chip-g' : 'chip-off');
+  document.getElementById('chip-motor').textContent = r ? 'Motor Running' : 'Motor Idle';
+  const pb = document.getElementById('prog');
+  pb.className = 'prog-fill' + (r ? ' run' : '');
+  if (!r) {
+    pb.style.width = '0%';
+    document.getElementById('countdown').textContent = '--:--';
+    document.getElementById('cd-seg').textContent = 'Stopped';
+  }
+}
+
+// ── Countdown timer (local simulation + MQTT progress override) ────────────
+function startCountdown() {
+  if (cdTimer) clearInterval(cdTimer);
+  S.remaining = S.totalMs;
+  cdTimer = setInterval(() => {
+    S.remaining -= 500;
+    if (S.remaining <= 0) { S.remaining = 0; clearInterval(cdTimer); }
+    const pct = Math.round((1 - S.remaining / S.totalMs) * 100);
+    document.getElementById('prog').style.width = pct + '%';
+    document.getElementById('countdown').textContent = fmtMMSS(S.remaining);
+  }, 500);
+}
+
+// ── Push all config to device ──────────────────────────────────────────────
+function pushAllConfig() {
+  if (!S.mqttConnected) { addLog('ERR', 'Not connected to MQTT'); return; }
+  if (S.running) { addLog('WARN', 'Cannot push config while motor is running'); return; }
+  mqPub(TOPICS.CFG_SPD,   String(S.speed));
+  mqPub(TOPICS.CFG_DIR,   S.dir === 1 ? 'fwd' : 'rev');
+  mqPub(TOPICS.CFG_PAUSE, String(S.pause[0]));
+  mqPub(TOPICS.CFG_SHAKE, String(S.shake[0]));
+  mqPub(TOPICS.CFG_TOTAL, pad(S.mm) + ':' + pad(S.ss));
+  addLog('CFG', `Pushed: spd=${S.speed}% dir=${S.dir===1?'fwd':'rev'} pause=${S.pause[0]}s shake=${S.shake[0]}x total=${pad(S.mm)}:${pad(S.ss)}`);
+}
+
+// ── Start / Stop ───────────────────────────────────────────────────────────
+function doStart() {
+  if (!S.mqttConnected) { addLog('ERR', 'Not connected to MQTT'); return; }
+  if (S.running) return;
+  if (S.totalMs < 1000) { addLog('ERR', 'Set total time >= 1 second'); return; }
+  pushAllConfig();
+  setTimeout(() => {
+    mqPub(TOPICS.MODE, 'F' + (S.mode + 1));
+    addLog('START', `F${S.mode+1} spd=${S.speed}% dir=${S.dir===1?'FWD':'REV'} total=${pad(S.mm)}:${pad(S.ss)}`);
+    startCountdown();
+  }, 300);
+}
+function doStop() {
+  if (!S.mqttConnected) { addLog('ERR', 'Not connected to MQTT'); return; }
+  mqPub(TOPICS.CTRL, 'stop');
+  addLog('STOP', 'Stop command sent');
+  if (cdTimer) clearInterval(cdTimer);
+  setRunning(false);
+}
+
+// ── MQTT publish ──────────────────────────────────────────────────────────
+function mqPub(topic, payload) {
+  if (!mqttClient || !S.mqttConnected) return;
+  mqttClient.publish(topic, payload, { qos: 1 }, (err) => {
+    if (err) addLog('ERR', 'Publish failed: ' + topic);
+  });
+}
+
+// ── MQTT connect / disconnect ──────────────────────────────────────────────
+function toggleConnect() {
+  if (S.mqttConnected) {
+    mqttClient.end(true);
+    setMqttStatus(false);
+    addLog('MQTT', 'Disconnected');
+    return;
+  }
+  const url  = document.getElementById('in-url').value.trim();
+  const user = document.getElementById('in-user').value.trim();
+  const pass = document.getElementById('in-pass').value.trim();
+  const cid  = document.getElementById('in-cid').value.trim() || ('dash_' + Date.now());
+
+  addLog('MQTT', 'Connecting to ' + url);
+  document.getElementById('btn-conn').textContent = 'Connecting...';
+  document.getElementById('btn-conn').disabled = true;
+
+  mqttClient = mqtt.connect(url, {
+    username:    user,
+    password:    pass,
+    clientId:    cid,
+    keepalive:   30,
+    reconnectPeriod: 0,
+    connectTimeout: 10000,
+  });
+
+  mqttClient.on('connect', () => {
+    setMqttStatus(true);
+    addLog('MQTT', 'Connected — subscribing to topics');
+    document.getElementById('sb-broker').textContent = url.replace('wss://','').split(':')[0];
+    mqttClient.subscribe([TOPICS.STATUS, TOPICS.PROGRESS, TOPICS.DEVST], { qos: 1 });
+  });
+
+  mqttClient.on('message', (topic, message) => {
+    const payload = message.toString();
+    addRxLog(topic, payload);
+    handleIncoming(topic, payload);
+  });
+
+  mqttClient.on('error', (err) => {
+    addLog('ERR', 'MQTT error: ' + err.message);
+    setMqttStatus(false);
+  });
+
+  mqttClient.on('close', () => {
+    setMqttStatus(false);
+    addLog('WARN', 'Connection closed');
+  });
+
+  mqttClient.on('offline', () => {
+    setMqttStatus(false);
+    addLog('WARN', 'Client offline');
+  });
+}
+
+function setMqttStatus(connected) {
+  S.mqttConnected = connected;
+  document.getElementById('lamp-mqtt').className = 'lamp ' + (connected ? 'g' : '');
+  document.getElementById('st-mqtt').textContent  = connected ? 'Online' : 'Offline';
+  document.getElementById('chip-mqtt').className  = 'chip ' + (connected ? 'chip-g' : 'chip-off');
+  document.getElementById('chip-mqtt').textContent = connected ? 'MQTT Online' : 'MQTT Offline';
+  document.getElementById('btn-conn').textContent = connected ? 'Disconnect' : 'Connect';
+  document.getElementById('btn-conn').className   = 'btn-conn' + (connected ? ' btn-disconn' : '');
+  document.getElementById('btn-conn').disabled    = false;
+  document.getElementById('btn-start').disabled   = !connected || S.running;
+  document.getElementById('btn-stop').disabled    = !connected || !S.running;
+}
+
+// ── Handle incoming messages ───────────────────────────────────────────────
+function handleIncoming(topic, payload) {
+  if (topic === TOPICS.STATUS) {
+    const running = payload === 'running';
+    const stopped = payload === 'stopped' || payload === 'completed';
+    document.getElementById('mon-status').textContent = payload;
+    document.getElementById('lmp-status').className = 'lamp ' + (running ? 'g' : stopped ? 'r' : 'a');
+    if (running && !S.running) setRunning(true);
+    if ((stopped) && S.running) {
+      setRunning(false);
+      if (cdTimer) clearInterval(cdTimer);
+      addLog(payload === 'completed' ? 'DONE' : 'STOP', 'Motor ' + payload);
     }
   }
- 
-  function updateButton(state) {
-    pinState = state;
-    btn.className = 'toggle-btn ' + (state ? 'on' : 'off');
-    btnLabel.textContent = state ? 'HIGH' : 'LOW';
-  }
- 
-  function toggle() {
-    const next = !pinState;
-    const msg  = next ? '1' : '0';
-    client.publish(PUB, msg, { qos: 0 }, (err) => {
-      if (err) {
-        log('Publish failed: ' + err.message, 'err');
-      } else {
-        updateButton(next);
-        log(`SENT → ${PUB} : ${msg}`, 'send');
+  if (topic === TOPICS.PROGRESS) {
+    document.getElementById('mon-prog').textContent = payload;
+    document.getElementById('lmp-prog').className = 'lamp a';
+    // Parse MM:SS from progress message like "F1 01:23 left"
+    const m = payload.match(/(\d{2}):(\d{2})/);
+    if (m) {
+      const remMs = (parseInt(m[1]) * 60 + parseInt(m[2])) * 1000;
+      S.remaining = remMs;
+      document.getElementById('countdown').textContent = m[1] + ':' + m[2];
+      if (S.totalMs > 0) {
+        const pct = Math.round((1 - remMs / S.totalMs) * 100);
+        document.getElementById('prog').style.width = Math.min(100, pct) + '%';
       }
-    });
+      const seg = payload.split(' ')[1] || '';
+      document.getElementById('cd-seg').textContent = payload.split(' ')[0] || '';
+    }
   }
- 
-  function connect() {
-    log('Connecting to broker...');
-    client = mqtt.connect(BROKER, {
-      clientId: CLIENT_ID,
-      clean: true,
-      reconnectPeriod: 3000,
-    });
- 
-    client.on('connect', () => {
-      setConnected(true);
-      updateButton(false);
-      log('Connected as ' + CLIENT_ID, 'recv');
-      client.subscribe(SUB, { qos: 0 });
-    });
- 
-    client.on('message', (topic, message) => {
-      const msg = message.toString();
-      log(`RECV ← ${topic} : ${msg}`, 'recv');
-    });
- 
-    client.on('disconnect', () => {
-      setConnected(false);
-      log('Disconnected', 'err');
-    });
- 
-    client.on('error', (err) => {
-      log('Error: ' + err.message, 'err');
-    });
- 
-    client.on('reconnect', () => {
-      log('Reconnecting...');
-    });
+  if (topic === TOPICS.DEVST) {
+    document.getElementById('mon-devst').textContent = payload;
+    document.getElementById('lmp-devst').className = 'lamp ' + (payload === 'online' ? 'g' : 'r');
+    document.getElementById('lamp-dev').className  = 'lamp ' + (payload === 'online' ? 'g' : 'r');
+    document.getElementById('st-dev').textContent  = payload === 'online' ? 'Online' : 'Offline';
   }
- 
-  connect();
+}
+
+// Boot log
+addLog('BOOT', 'Dashboard ready — configure broker and connect');
 </script>
 </body>
 </html>
